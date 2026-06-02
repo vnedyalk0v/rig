@@ -3,8 +3,9 @@ name: Sync main to dev
 # Keeps `dev` aligned with `main` after changes that land directly on `main`
 # (for example a `hotfix/*` merge). When `main` and `dev` no longer share the
 # same content, this opens a `main -> dev` back-merge pull request for the
-# maintainer to review and squash-merge. Normal `dev -> main` promotions leave
-# the two branches with identical content, so no pull request is opened then.
+# maintainer to review and merge-commit (not squash, so the shared ancestor is
+# preserved). Normal `dev -> main` promotions leave the two branches with
+# identical content, so no pull request is opened then.
 
 on:
   push:
@@ -36,4 +37,4 @@ jobs:
           fi
           gh pr create --base dev --head main \
             --title "chore: sync main into dev" \
-            --body "Automated back-merge so \`dev\` includes changes that landed directly on \`main\` (for example a hotfix). Review and squash-merge to realign the branches."
+            --body "Automated back-merge so \`dev\` includes changes that landed directly on \`main\` (for example a hotfix). Review and **merge-commit** this pull request (do not squash) so \`dev\` and \`main\` keep a shared ancestor."

@@ -71,11 +71,12 @@ be missing that fix. This is handled automatically: the `sync-main-to-dev`
 workflow (`.github/workflows/sync-main-to-dev.yml`) runs on every push to
 `main` and, whenever `main` and `dev` differ in content, opens a
 `main -> dev` back-merge pull request titled `chore: sync main into dev`. The
-maintainer reviews and squash-merges it to realign the branches.
+maintainer reviews and **merge-commits** it (not squash) to realign the
+branches while preserving their shared ancestor.
 
 Normal `dev -> main` promotions leave both branches with identical content, so
 no sync pull request is opened in that case. `dev` is protected, so the realign
-always happens through that pull request (squash-merge it) rather than a direct
+always happens through that pull request (merge-commit it) rather than a direct
 push; you can open it manually if needed with
 `gh pr create --base dev --head main`.
 
@@ -88,7 +89,6 @@ suggestion does not apply, before requesting a merge.
 Before opening a pull request, confirm:
 
 - [ ] The pull request targets `dev` (or `main` only for a `dev`/`hotfix/*` branch).
-
 - [ ] The change matches `docs/rig-v1-spec.md` or updates the spec.
 - [ ] User-facing behavior is documented in `README.md` or another linked doc.
 - [ ] Security-sensitive behavior is covered in `SECURITY.md` when relevant.
