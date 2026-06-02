@@ -27,7 +27,7 @@ rig_print_list() {
   rig_validate_catalogs || return 1
 
   printf 'category\tid\tlabel\tkind\tpackage\tdefault\tversion_strategy\tdescription\n'
-  while IFS="$RIG_TSV_DELIMITER" read -r category id label kind package default_flag description version_strategy versions notes; do
+  while IFS="$RIG_TSV_DELIMITER" read -r category id label kind package default_flag description version_strategy _versions _notes; do
     if [ "$category_filter" != "" ] && [ "$category" != "$category_filter" ]; then
       continue
     fi
@@ -69,12 +69,11 @@ rig_collect_selected_tools() {
         rig_print_error "duplicate catalog id selected: $selected_id"
         return 1
       fi
-      row=$(rig_lookup_tool "$selected_id")
-      if [ "$?" -ne 0 ]; then
+      if ! row=$(rig_lookup_tool "$selected_id"); then
         rig_print_error "unknown catalog id: $selected_id"
         return 1
       fi
-      IFS="$RIG_TSV_DELIMITER" read -r category id label kind package default_flag description version_strategy versions notes <<EOF
+      IFS="$RIG_TSV_DELIMITER" read -r category _id _label _kind _package _default_flag _description _version_strategy _versions _notes <<EOF
 $row
 EOF
       if [ "$category_filter" != "" ] && [ "$category" != "$category_filter" ]; then
@@ -90,7 +89,7 @@ EOF
     return 0
   fi
 
-  while IFS="$RIG_TSV_DELIMITER" read -r category id label kind package default_flag description version_strategy versions notes; do
+  while IFS="$RIG_TSV_DELIMITER" read -r category id _label _kind _package default_flag _description _version_strategy _versions _notes; do
     if [ "$category_filter" != "" ] && [ "$category" != "$category_filter" ]; then
       continue
     fi
@@ -220,12 +219,10 @@ rig_render_dry_run() {
 
   rig_validate_catalogs || return 1
 
-  selected_tools=$(rig_collect_selected_tools "$select_arg" "$category_filter")
-  if [ "$?" -ne 0 ]; then
+  if ! selected_tools=$(rig_collect_selected_tools "$select_arg" "$category_filter"); then
     return 1
   fi
-  selected_defaults=$(rig_collect_selected_defaults "$defaults_arg")
-  if [ "$?" -ne 0 ]; then
+  if ! selected_defaults=$(rig_collect_selected_defaults "$defaults_arg"); then
     return 1
   fi
 
@@ -239,7 +236,7 @@ rig_render_dry_run() {
       continue
     fi
     row=$(rig_lookup_tool "$selected_id")
-    IFS="$RIG_TSV_DELIMITER" read -r category id label kind package default_flag description version_strategy versions notes <<EOF
+    IFS="$RIG_TSV_DELIMITER" read -r _category _id _label kind package _default_flag _description _version_strategy _versions _notes <<EOF
 $row
 EOF
     case "$kind" in
@@ -264,7 +261,7 @@ EOF
       continue
     fi
     row=$(rig_lookup_tool "$selected_id")
-    IFS="$RIG_TSV_DELIMITER" read -r category id label kind package default_flag description version_strategy versions notes <<EOF
+    IFS="$RIG_TSV_DELIMITER" read -r _category id label kind package _default_flag _description version_strategy _versions _notes <<EOF
 $row
 EOF
     case "$kind" in
@@ -294,7 +291,7 @@ EOF
       continue
     fi
     row=$(rig_lookup_default "$selected_default")
-    IFS="$RIG_TSV_DELIMITER" read -r id label description command_text restart_hint <<EOF
+    IFS="$RIG_TSV_DELIMITER" read -r _id _label _description command_text _restart_hint <<EOF
 $row
 EOF
     printf '%s\n' "$command_text"
@@ -308,8 +305,7 @@ EOF
   printf '\n'
 
   printf '# Shell/profile edits preview\n'
-  profile_path=$(rig_profile_path 2>/dev/null)
-  if [ "$?" -eq 0 ]; then
+  if profile_path=$(rig_profile_path 2>/dev/null); then
     if [ "$shell_edit_count" -gt 0 ]; then
       printf 'Would add managed rig initialization block to %s.\n' "$profile_path"
     else

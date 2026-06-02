@@ -39,14 +39,14 @@ EOF
 rig_resolve_root() {
   source_path=$1
   while [ -L "$source_path" ]; do
-    source_dir=$(CDPATH= cd -P -- "$(dirname -- "$source_path")" && pwd)
+    source_dir=$(CDPATH='' cd -P -- "$(dirname -- "$source_path")" && pwd)
     target_path=$(readlink "$source_path")
     case "$target_path" in
       /*) source_path=$target_path ;;
       *) source_path=$source_dir/$target_path ;;
     esac
   done
-  CDPATH= cd -P -- "$(dirname -- "$source_path")" && pwd
+  CDPATH='' cd -P -- "$(dirname -- "$source_path")" && pwd
 }
 
 rig_profile_path() {

@@ -105,7 +105,7 @@ rig_validate_tools_catalog() {
     fi
 
     record=$(rig_tsv_to_record "$line")
-    IFS="$RIG_TSV_DELIMITER" read -r category id label kind package default_flag description version_strategy versions notes <<EOF
+    IFS="$RIG_TSV_DELIMITER" read -r category id label kind package default_flag description version_strategy _versions _notes <<EOF
 $record
 EOF
 
@@ -197,7 +197,7 @@ rig_validate_defaults_catalog() {
     fi
 
     record=$(rig_tsv_to_record "$line")
-    IFS="$RIG_TSV_DELIMITER" read -r id label description command_text restart_hint <<EOF
+    IFS="$RIG_TSV_DELIMITER" read -r id label description command_text _restart_hint <<EOF
 $record
 EOF
 
@@ -270,7 +270,7 @@ rig_each_default() {
 
 rig_tool_exists() {
   wanted=$1
-  while IFS="$RIG_TSV_DELIMITER" read -r category id label kind package default_flag description version_strategy versions notes; do
+  while IFS="$RIG_TSV_DELIMITER" read -r _category id _label _kind _package _default_flag _description _version_strategy _versions _notes; do
     if [ "$id" = "$wanted" ]; then
       return 0
     fi
@@ -282,7 +282,7 @@ EOF
 
 rig_default_exists() {
   wanted=$1
-  while IFS="$RIG_TSV_DELIMITER" read -r id label description command_text restart_hint; do
+  while IFS="$RIG_TSV_DELIMITER" read -r id _label _description _command_text _restart_hint; do
     if [ "$id" = "$wanted" ]; then
       return 0
     fi
@@ -295,7 +295,7 @@ EOF
 rig_lookup_tool() {
   wanted=$1
   while IFS= read -r record || [ "$record" != "" ]; do
-    IFS="$RIG_TSV_DELIMITER" read -r category id label kind package default_flag description version_strategy versions notes <<EOF
+    IFS="$RIG_TSV_DELIMITER" read -r _category id _label _kind _package _default_flag _description _version_strategy _versions _notes <<EOF
 $record
 EOF
     if [ "$id" = "$wanted" ]; then
@@ -311,7 +311,7 @@ EOF
 rig_lookup_default() {
   wanted=$1
   while IFS= read -r record || [ "$record" != "" ]; do
-    IFS="$RIG_TSV_DELIMITER" read -r id label description command_text restart_hint <<EOF
+    IFS="$RIG_TSV_DELIMITER" read -r id _label _description _command_text _restart_hint <<EOF
 $record
 EOF
     if [ "$id" = "$wanted" ]; then

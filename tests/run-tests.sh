@@ -2,12 +2,13 @@
 
 set -u
 
-ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+ROOT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 TMP_ROOT=${TMPDIR:-/tmp}
 TEST_TMP=$(mktemp -d "${TMP_ROOT%/}/rig-tests.XXXXXX")
 
 failures=0
 
+# shellcheck disable=SC2329
 cleanup() {
   rm -rf "$TEST_TMP"
 }

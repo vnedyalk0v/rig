@@ -2,8 +2,8 @@
 
 set -u
 
-SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-RIG_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+RIG_ROOT=$(CDPATH='' cd -- "$SCRIPT_DIR/.." && pwd)
 
 . "$RIG_ROOT/lib/rig/common.sh"
 . "$RIG_ROOT/lib/rig/catalog.sh"
