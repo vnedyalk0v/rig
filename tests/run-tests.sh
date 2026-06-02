@@ -148,6 +148,38 @@ run_capture "$out" ./rig install
 assert_failure "$?" "rig install without dry-run is deferred"
 assert_contains "$out" "real installs are deferred in this MVP" "deferred install message is clear"
 
+fake_git_bin="$TEST_TMP/fake-git-bin"
+fake_git_log="$TEST_TMP/self-update-git.log"
+mkdir -p "$fake_git_bin"
+cat >"$fake_git_bin/git" <<EOF
+#!/bin/bash
+printf '%s\n' "\$*" >>"$fake_git_log"
+exit 0
+EOF
+chmod +x "$fake_git_bin/git"
+
+out="$TEST_TMP/self-update-help.out"
+rm -f "$fake_git_log"
+PATH="$fake_git_bin:$PATH" run_capture "$out" ./rig self-update --help
+assert_success "$?" "rig self-update --help succeeds"
+assert_contains "$out" "Usage: rig self-update" "self-update help is shown"
+if [ -e "$fake_git_log" ]; then
+  fail "rig self-update --help does not invoke git"
+else
+  pass "rig self-update --help does not invoke git"
+fi
+
+out="$TEST_TMP/self-update-unknown-arg.out"
+rm -f "$fake_git_log"
+PATH="$fake_git_bin:$PATH" run_capture "$out" ./rig self-update --bogus
+assert_failure "$?" "rig self-update rejects unknown arguments"
+assert_contains "$out" "unknown self-update argument: --bogus" "unknown self-update argument is reported"
+if [ -e "$fake_git_log" ]; then
+  fail "rig self-update unknown argument does not invoke git"
+else
+  pass "rig self-update unknown argument does not invoke git"
+fi
+
 if [ "$(uname -s 2>/dev/null)" = "Darwin" ]; then
   doctor_home="$TEST_TMP/readonly-home"
   mkdir -p "$doctor_home"
