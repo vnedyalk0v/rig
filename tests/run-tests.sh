@@ -7,9 +7,13 @@ TMP_ROOT=${TMPDIR:-/tmp}
 TEST_TMP=$(mktemp -d "${TMP_ROOT%/}/rig-tests.XXXXXX")
 
 failures=0
+doctor_home=
 
 # shellcheck disable=SC2329
 cleanup() {
+  if [ "$doctor_home" != "" ] && [ -d "$doctor_home" ]; then
+    chmod -R u+rwx "$doctor_home" 2>/dev/null || true
+  fi
   rm -rf "$TEST_TMP"
 }
 
@@ -165,6 +169,11 @@ run_capture "$out" ./rig dry-run --select does-not-exist
 assert_failure "$?" "dry-run rejects unknown tool ids"
 assert_contains "$out" "unknown catalog id: does-not-exist" "unknown tool id is reported"
 
+out="$TEST_TMP/glob-selection.out"
+run_capture "$out" ./rig dry-run --select '*'
+assert_failure "$?" "dry-run rejects glob characters without expanding them"
+assert_contains "$out" "invalid catalog id: *" "glob selection is reported literally"
+
 bootstrap_home="$TEST_TMP/bootstrap-home"
 mkdir -p "$bootstrap_home"
 out="$TEST_TMP/bootstrap-dry-run.out"
@@ -182,6 +191,11 @@ out="$TEST_TMP/bootstrap-invalid-branch.out"
 run_capture "$out" ./install.sh --dry-run --branch -bad
 assert_failure "$?" "install.sh rejects option-like branch names"
 assert_contains "$out" "invalid branch name: -bad" "invalid branch name is reported"
+
+out="$TEST_TMP/bootstrap-invalid-repo-url.out"
+run_capture "$out" ./install.sh --dry-run --repo-url 'ext::sh -c bad'
+assert_failure "$?" "install.sh rejects unsafe repo URL transports"
+assert_contains "$out" "invalid repo URL: ext::sh -c bad" "invalid repo URL is reported"
 
 if [ "$failures" -eq 0 ]; then
   printf 'All tests passed\n'

@@ -70,6 +70,11 @@ rig_profile_path() {
 rig_join_csv_as_lines() {
   value=$1
   old_ifs=$IFS
+  case "$-" in
+    *f*) glob_was_disabled=yes ;;
+    *) glob_was_disabled=no ;;
+  esac
+  set -f
   IFS=,
   for item in $value; do
     IFS=$old_ifs
@@ -79,4 +84,7 @@ rig_join_csv_as_lines() {
     IFS=,
   done
   IFS=$old_ifs
+  if [ "$glob_was_disabled" = "no" ]; then
+    set +f
+  fi
 }

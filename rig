@@ -3,6 +3,7 @@
 set -u
 
 resolve_rig_root() {
+  local source_path source_dir target_path
   source_path=$1
   while [ -L "$source_path" ]; do
     source_dir=$(CDPATH='' cd -P -- "$(dirname -- "$source_path")" && pwd)
@@ -27,6 +28,8 @@ RIG_ROOT=$(resolve_rig_root "$0")
 . "$RIG_ROOT/lib/rig/doctor.sh"
 
 rig_install_command() {
+  local arg
+
   if [ "$#" -gt 0 ]; then
     case "$1" in
       --help|-h)
@@ -66,6 +69,8 @@ rig_self_update() {
 }
 
 rig_main() {
+  local command_name
+
   if [ "$#" -eq 0 ]; then
     rig_usage
     return 0

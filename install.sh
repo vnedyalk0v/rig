@@ -33,6 +33,15 @@ validate_branch_name() {
   return 0
 }
 
+validate_repo_url() {
+  case "$1" in
+    https://*|git@github.com:*)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
 require_macos() {
   if [ "$(uname -s 2>/dev/null)" != "Darwin" ]; then
     error "rig supports macOS only; detected $(uname -s 2>/dev/null)"
@@ -76,6 +85,11 @@ done
 
 if ! validate_branch_name "$branch"; then
   error "invalid branch name: $branch"
+  exit 1
+fi
+
+if ! validate_repo_url "$repo_url"; then
+  error "invalid repo URL: $repo_url"
   exit 1
 fi
 
