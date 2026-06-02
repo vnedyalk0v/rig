@@ -39,7 +39,7 @@ dry-run modes.
 ## Critical Files
 
 - `docs/rig-v1-spec.md` — authoritative v1 design. **Always reconcile against this.**
-- `docs/repository-settings.md` — point-in-time GitHub API snapshot (see Boundaries).
+- `docs/repository-settings.md` — record of the configured GitHub settings (see Boundaries).
 - `README.md` — user-facing entrypoint; planned commands and bootstrap one-liners.
 - `CONTRIBUTING.md` — contribution rules and validation commands.
 - `SECURITY.md` — installer/supply-chain security expectations.
@@ -97,8 +97,8 @@ shellcheck install.sh         # if available
 ### Ask First
 - Changing v1 **scope**, adding catalog categories/tools, or new install strategies.
 - Adding any dependency.
-- Editing the "Current State" section of `docs/repository-settings.md` — it is a
-  GitHub API snapshot; re-verify with `gh api` before changing it.
+- Editing the "Current State" section of `docs/repository-settings.md` — it
+  records live GitHub settings; re-verify with `gh api` before changing it.
 - Adding macOS tweaks beyond the minimal, clearly-labeled opt-in set.
 - Any large refactor or multi-file rewrite.
 

@@ -63,14 +63,14 @@ The earlier `Protect main` ruleset condition bug was fixed: the condition is now
 - require pull requests;
 - require review thread resolution;
 - require the `verify-base` status check;
-- allow only squash merges.
+- allow squash and merge-commit merges (rebase disabled).
 
 `Protect dev` rules:
 
 - prevent branch deletion;
 - prevent non-fast-forward updates;
 - require pull requests;
-- allow only squash merges.
+- allow squash and merge-commit merges (rebase disabled).
 
 For a solo-maintained repo, zero required approvals is acceptable until there
 are collaborators.
