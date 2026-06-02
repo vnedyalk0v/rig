@@ -1,0 +1,39 @@
+name: Sync main to dev
+
+# Keeps `dev` aligned with `main` after changes that land directly on `main`
+# (for example a `hotfix/*` merge). When `main` and `dev` no longer share the
+# same content, this opens a `main -> dev` back-merge pull request for the
+# maintainer to review and squash-merge. Normal `dev -> main` promotions leave
+# the two branches with identical content, so no pull request is opened then.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  back-merge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open back-merge PR when main and dev differ
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          main_tree=$(gh api "repos/$REPO/commits/main" --jq '.commit.tree.sha')
+          dev_tree=$(gh api "repos/$REPO/commits/dev" --jq '.commit.tree.sha')
+          if [ "$main_tree" = "$dev_tree" ]; then
+            echo "dev already matches main (identical tree); nothing to sync."
+            exit 0
+          fi
+          existing=$(gh pr list --base dev --head main --state open --json number --jq 'length')
+          if [ "$existing" != "0" ]; then
+            echo "An open main -> dev sync pull request already exists; it updates automatically."
+            exit 0
+          fi
+          gh pr create --base dev --head main \
+            --title "chore: sync main into dev" \
+            --body "Automated back-merge so \`dev\` includes changes that landed directly on \`main\` (for example a hotfix). Review and squash-merge to realign the branches."

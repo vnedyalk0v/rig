@@ -44,6 +44,9 @@ dry-run modes.
 - `CONTRIBUTING.md` — contribution rules and validation commands.
 - `SECURITY.md` — installer/supply-chain security expectations.
 - `.github/ISSUE_TEMPLATE/`, `.github/pull_request_template.md` — issue/PR formats.
+- `.github/workflows/pr-base-guard.yml` — `verify-base` check (only `dev`/`hotfix/*` may target `main`).
+- `.github/workflows/sync-main-to-dev.yml` — opens a `main -> dev` back-merge PR after a hotfix.
+- `.coderabbit.yaml` — CodeRabbit review configuration.
 - *(Planned)* `install.sh`, `rig`, catalog `.tsv`, `macos-defaults.sh`.
 
 ## Key Commands
