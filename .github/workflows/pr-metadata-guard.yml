@@ -1,0 +1,27 @@
+name: PR metadata guard
+
+# Enforces repository publishing conventions before a pull request can be
+# merged. This catches branch names and PR titles that drift from the repo-local
+# rules in AGENTS.md and CONTRIBUTING.md.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  verify-pr-metadata:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+      - name: Enforce branch and title policy
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+        run: ./scripts/validate-pr-metadata.sh

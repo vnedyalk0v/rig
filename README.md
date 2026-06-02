@@ -78,7 +78,7 @@ rig version
 
 ```bash
 bash tests/run-tests.sh
-for f in install.sh rig lib/rig/*.sh scripts/validate-catalog.sh tests/run-tests.sh; do
+for f in install.sh rig lib/rig/*.sh scripts/*.sh tests/*.sh; do
   bash -n "$f"
 done
 ./scripts/validate-catalog.sh

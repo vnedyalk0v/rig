@@ -66,7 +66,7 @@ There is no build system. Validate work with the lightest sufficient check.
 - **Shell scripts:**
 
 ```bash
-for f in install.sh rig lib/rig/*.sh scripts/validate-catalog.sh tests/run-tests.sh; do
+for f in install.sh rig lib/rig/*.sh scripts/*.sh tests/*.sh; do
   bash -n "$f"                # syntax check, no execution
 done
 shellcheck install.sh         # if available
@@ -136,8 +136,21 @@ bash tests/run-tests.sh
   release branch. Branch off `dev` and open pull requests against `dev`. Only
   `dev` and `hotfix/*` branches may target `main`, and the `verify-base` check
   enforces this.
+- **Publishing guard:** never use tool/plugin default prefixes such as
+  `codex/`. Feature branch names must use the repo prefix style:
+  `feat/*`, `fix/*`, `bug/*`, `docs/*`, `chore/*`, `ci/*`, or
+  `refactor/*`. The only non-feature PR into `dev` is the `main -> dev` sync.
 - Use the issue/PR title style already in the repo (`feat:`, `bug:`/`fix:`) and
   complete the `.github/pull_request_template.md` checklist.
+- Before pushing or opening a pull request, explicitly check:
+
+```bash
+git branch --show-current
+git status --short --branch
+```
+
+  Confirm the branch name, PR title, and PR base match this section before
+  running `git push` or `gh pr create`.
 - Document user-facing behavior changes in `README.md` or the relevant linked doc.
 - Flag security-relevant changes against `SECURITY.md`.
 - CodeRabbit reviews every pull request via `.coderabbit.yaml`; resolve or

@@ -79,6 +79,11 @@ assert_failure() {
 
 cd "$ROOT_DIR" || exit 1
 
+out="$TEST_TMP/pr-metadata-guard.out"
+run_capture "$out" bash tests/pr-metadata-guard-tests.sh
+assert_success "$?" "PR metadata guard tests pass"
+assert_contains "$out" "All PR metadata guard tests passed" "PR metadata guard reports success"
+
 out="$TEST_TMP/catalog-valid.out"
 run_capture "$out" ./scripts/validate-catalog.sh
 assert_success "$?" "catalog validation passes"
