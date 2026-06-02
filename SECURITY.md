@@ -10,6 +10,19 @@ behavior and supply-chain behavior as sensitive.
 The project is pre-release. Until tagged releases exist, only the current
 `main` branch is in scope for security fixes.
 
+## Current MVP Security Posture
+
+Real workstation package installs, `brew bundle`, generated config writes,
+shell startup edits, macOS defaults, and LaunchAgents are not active yet. The
+implemented security-sensitive surfaces are the remote bootstrap script, local
+tool bootstrap/update, CLI argument parsing, catalog parsing, dry-run rendering,
+and `rig self-update`.
+
+Keep the current protections covered: non-macOS commands fail before rendering
+plans or invoking update work, dry-run paths create no user or system state,
+unsafe bootstrap repository URLs and option-like branch names are rejected, and
+command-path conflicts fail before clone/update work.
+
 ## Reporting a Vulnerability
 
 Use GitHub private vulnerability reporting for this repository if it is

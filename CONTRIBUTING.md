@@ -115,22 +115,19 @@ Before opening a pull request, confirm:
 
 ## Validation
 
-There is no build system. Use the shell test harness and focused syntax checks:
+There is no build system. Before committing or pushing, run the full local gate:
 
 ```bash
-bash tests/run-tests.sh
 for f in install.sh rig lib/rig/*.sh scripts/*.sh tests/*.sh; do
   bash -n "$f"
 done
-./install.sh --dry-run
-./rig dry-run
-```
-
-Catalog changes should also be validated by a command or script that proves the
-TSV shape is parseable and every selectable item has a description.
-
-```bash
+bash tests/run-tests.sh
 ./scripts/validate-catalog.sh
+./rig dry-run --select vscode,chrome,node-npm --defaults finder-show-hidden-files
+./install.sh --dry-run
+shellcheck install.sh rig lib/rig/*.sh scripts/*.sh tests/*.sh
+actionlint .github/workflows/*.yml
+git diff --check
 ```
 
 ## Issues
