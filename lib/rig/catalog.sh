@@ -284,6 +284,25 @@ rig_lookup_tool() {
   rig_lookup_record rig_each_tool "$1" 2
 }
 
+rig_tool_category_exists() {
+  local wanted record category _id _label _kind _package _default_flag _description _version_strategy _versions _notes
+  wanted=$1
+  while IFS= read -r record || [ "$record" != "" ]; do
+    if [ "$record" = "" ]; then
+      continue
+    fi
+    IFS="$RIG_TSV_DELIMITER" read -r category _id _label _kind _package _default_flag _description _version_strategy _versions _notes <<EOF
+$record
+EOF
+    if [ "$category" = "$wanted" ]; then
+      return 0
+    fi
+  done <<EOF
+$(rig_each_tool)
+EOF
+  return 1
+}
+
 rig_lookup_default() {
   rig_lookup_record rig_each_default "$1" 1
 }

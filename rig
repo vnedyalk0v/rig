@@ -65,6 +65,7 @@ rig_install_command() {
     esac
   done
 
+  rig_require_macos || return 1
   rig_print_error "real installs are deferred in this MVP; run 'rig install --dry-run' to preview the plan"
   return 1
 }
@@ -88,6 +89,7 @@ rig_self_update() {
     esac
   fi
 
+  rig_require_macos || return 1
   if [ ! -d "$RIG_ROOT/.git" ]; then
     rig_print_error "self-update requires a git clone; current rig root is $RIG_ROOT"
     return 1
