@@ -54,12 +54,25 @@ The workflow is:
    directly against `main`** — a CI check rejects it.
 3. A maintainer promotes `dev` to `main` with a `dev` -> `main` pull request.
 4. Emergency fixes may use a `hotfix/*` branch that targets `main` directly.
-   After a hotfix merges, the maintainer syncs `main` back into `dev` so the
-   branches do not drift.
 
 Pull requests into `main` are only accepted from `dev` or `hotfix/*` and only
 from this repository; this is enforced by the `verify-base` GitHub Actions
 check (`.github/workflows/pr-base-guard.yml`).
+
+### Keeping `dev` in sync after a hotfix
+
+A `hotfix/*` branch lands on `main` without going through `dev`, so `dev` would
+be missing that fix. This is handled automatically: the `sync-main-to-dev`
+workflow (`.github/workflows/sync-main-to-dev.yml`) runs on every push to
+`main` and, whenever `main` and `dev` differ in content, opens a
+`main -> dev` back-merge pull request titled `chore: sync main into dev`. The
+maintainer reviews and squash-merges it to realign the branches.
+
+Normal `dev -> main` promotions leave both branches with identical content, so
+no sync pull request is opened in that case. `dev` is protected, so the realign
+always happens through that pull request (squash-merge it) rather than a direct
+push; you can open it manually if needed with
+`gh pr create --base dev --head main`.
 
 [CodeRabbit](https://coderabbit.ai) reviews every pull request automatically
 using `.coderabbit.yaml`. Address its findings, or reply explaining why a

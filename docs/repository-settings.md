@@ -39,7 +39,9 @@ rationale for a public open-source repository.
 
 Work flows `feature/* -> dev -> main`. Feature branches target `dev`; the
 maintainer promotes `dev` to `main`. Emergency `hotfix/*` branches may target
-`main` directly, after which `main` is synced back into `dev`.
+`main` directly, after which the `sync-main-to-dev` workflow
+(`.github/workflows/sync-main-to-dev.yml`) opens a `main -> dev` back-merge
+pull request so `dev` regains the fix.
 
 GitHub rulesets cannot restrict the source branch of a pull request, so the
 "only `dev` (or `hotfix/*`) may target `main`" rule is enforced by the
@@ -118,8 +120,12 @@ so security reporting and dependency visibility should be enabled early.
 - Prefer GitHub-owned or verified actions.
 - The `verify-base` workflow is a required status check on `main` (added after
   it ran once on a `dev` -> `main` pull request).
+- The `sync-main-to-dev` workflow opens a `main -> dev` back-merge pull request
+  when the branches diverge (for example after a hotfix); it needs
+  `pull-requests: write`.
 - Pin third-party actions by SHA when workflows grow beyond simple trusted
-  actions. The current `pr-base-guard.yml` workflow uses no third-party actions.
+  actions. Both current workflows use only the GitHub CLI and no third-party
+  actions.
 
 Rationale: required checks are useful only after workflows exist; enabling them
 too early can block all merges.
