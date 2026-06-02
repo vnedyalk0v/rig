@@ -7,10 +7,10 @@
 
 language: en-US
 tone_instructions: >-
-  Be concise and direct. Prioritize correctness, then user safety and
-  auditability, then idempotency, then simplicity. Focus on shell-injection
-  risk, unquoted expansions, Bash 3.2 compatibility, dry-run side effects, and
-  whether changes stay consistent with docs/rig-v1-spec.md.
+  Be concise and direct. Prioritize correctness, then safety and auditability,
+  then idempotency, then simplicity. Flag shell-injection risk, unquoted
+  expansions, Bash 3.2 incompatibilities, dry-run side effects, and drift from
+  docs/rig-v1-spec.md.
 early_access: false
 enable_free_tier: true
 
