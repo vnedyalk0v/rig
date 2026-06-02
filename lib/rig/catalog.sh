@@ -174,6 +174,20 @@ EOF
     rig_print_error "$catalog_path:$line_no: package is required"
     return 1
   fi
+  if [ "$kind" = "tap-formula" ]; then
+    case "$package" in
+      */*)
+        if [ "${package%/*}" = "" ] || [ "${package##*/}" = "" ]; then
+          rig_print_error "$catalog_path:$line_no: invalid tap-formula package: $package"
+          return 1
+        fi
+        ;;
+      *)
+        rig_print_error "$catalog_path:$line_no: invalid tap-formula package: $package"
+        return 1
+        ;;
+    esac
+  fi
   if [ "$kind" = "mas" ]; then
     case "$package" in
       ""|*[!0-9]*)

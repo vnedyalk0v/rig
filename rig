@@ -49,6 +49,8 @@ rig_install_command() {
     return "$?"
   fi
 
+  rig_require_macos || return 1
+
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --select|--defaults|--category)
@@ -65,7 +67,6 @@ rig_install_command() {
     esac
   done
 
-  rig_require_macos || return 1
   rig_print_error "real installs are deferred in this MVP; run 'rig install --dry-run' to preview the plan"
   return 1
 }

@@ -199,9 +199,15 @@ assert_failure "$?" "rig install without dry-run is deferred"
 assert_contains "$out" "real installs are deferred in this MVP" "deferred install message is clear"
 
 out="$TEST_TMP/install-unknown-arg.out"
-run_capture "$out" ./rig install --bogus
+PATH="$fake_darwin_bin:$PATH" run_capture "$out" ./rig install --bogus
 assert_failure "$?" "rig install rejects unknown arguments"
 assert_contains "$out" "unknown install argument: --bogus" "unknown install argument is reported"
+
+out="$TEST_TMP/install-unknown-arg-non-macos.out"
+PATH="$fake_linux_bin:$PATH" run_capture "$out" ./rig install --bogus
+assert_failure "$?" "rig install guards non-macOS before install argument parsing"
+assert_contains "$out" "rig supports macOS only; detected Linux" "install unknown argument reports macOS guard first on non-macOS"
+assert_not_contains "$out" "unknown install argument: --bogus" "install unknown argument does not parse unsupported platform"
 
 out="$TEST_TMP/install-help-anywhere.out"
 run_capture "$out" ./rig install --select vscode --help
@@ -222,6 +228,16 @@ out="$TEST_TMP/catalog-invalid-mas.out"
 run_capture "$out" ./scripts/validate-catalog.sh --tools "$invalid_mas_catalog"
 assert_failure "$?" "catalog validation rejects non-numeric mas ids"
 assert_contains "$out" "invalid mas id: not-a-number" "invalid mas id is reported"
+
+invalid_tap_catalog="$TEST_TMP/invalid-tap-tools.tsv"
+{
+  printf 'category\tid\tlabel\tkind\tpackage\tdefault\tdescription\tversion_strategy\tversions\tnotes\n'
+  printf 'infra\tbad-tap\tBad Tap\ttap-formula\tmissing-slash\tno\tInvalid tap formula\thomebrew-latest\t\t\n'
+} >"$invalid_tap_catalog"
+out="$TEST_TMP/catalog-invalid-tap.out"
+run_capture "$out" ./scripts/validate-catalog.sh --tools "$invalid_tap_catalog"
+assert_failure "$?" "catalog validation rejects tap-formula packages without a slash"
+assert_contains "$out" "invalid tap-formula package: missing-slash" "invalid tap-formula package is reported"
 
 fake_git_bin="$TEST_TMP/fake-git-bin"
 fake_git_log="$TEST_TMP/self-update-git.log"
@@ -282,6 +298,19 @@ else
   assert_contains "$out" "rig supports macOS only" "doctor reports macOS-only guard"
 fi
 
+fake_dscl_bin="$TEST_TMP/fake-dscl-bin"
+mkdir -p "$fake_dscl_bin"
+cat >"$fake_dscl_bin/dscl" <<'EOF'
+#!/bin/bash
+printf 'UserShell: /opt/homebrew/bin/fish\n'
+EOF
+chmod +x "$fake_dscl_bin/dscl"
+out="$TEST_TMP/doctor-unsupported-dscl-shell.out"
+PATH="$fake_darwin_bin:$fake_dscl_bin:$PATH" SHELL=/bin/zsh run_capture "$out" ./rig doctor
+assert_success "$?" "rig doctor succeeds with unsupported dscl login shell warning"
+assert_contains "$out" "warning: unsupported login shell: fish" "doctor warning uses resolved login shell"
+assert_not_contains "$out" "warning: unsupported login shell: zsh" "doctor warning does not fall back to SHELL when dscl resolved a shell"
+
 out="$TEST_TMP/unknown-selection.out"
 PATH="$fake_darwin_bin:$PATH" run_capture "$out" ./rig dry-run --select does-not-exist
 assert_failure "$?" "dry-run rejects unknown tool ids"
@@ -311,7 +340,7 @@ out="$TEST_TMP/bootstrap-dry-run-non-macos.out"
 HOME="$non_macos_bootstrap_home" PATH="$fake_linux_bin:$PATH" run_capture "$out" ./install.sh --dry-run
 assert_failure "$?" "install.sh --dry-run fails clearly on non-macOS"
 assert_contains "$out" "rig supports macOS only; detected Linux" "bootstrap dry-run reports macOS-only guard"
-assert_not_contains "$out" "rig bootstrap dry-run" "bootstrap dry-run does not render a plan on non-macOS"
+assert_not_contains "$out" "Dry run: no files will be created or changed" "bootstrap dry-run does not render a plan on non-macOS"
 if [ -e "$non_macos_bootstrap_home/.local" ]; then
   fail "install.sh non-macOS dry-run does not create HOME state"
 else
