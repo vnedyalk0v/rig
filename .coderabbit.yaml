@@ -37,7 +37,6 @@ reviews:
     drafts: false
     base_branches:
       - main
-      - dev
 
   path_instructions:
     - path: "install.sh"
