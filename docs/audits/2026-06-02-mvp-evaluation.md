@@ -24,8 +24,10 @@ None.
 - Rejection of whitespace inside `--select 'vscode, chrome'` is not treated as a
   current defect because the CLI documents comma-separated IDs, and the
   interactive plain-Bash space/comma input path is not implemented yet.
-- Current workflows have no third-party actions to pin and do not check out PR
-  code for policy enforcement.
+- The reviewed policy workflows (`pr-base-guard.yml`,
+  `pr-metadata-guard.yml`, and `sync-main-to-dev.yml`) use inline shell and no
+  third-party actions, so the original trusted-code and action-pinning concerns
+  are not open MVP findings.
 
 ## Verification Notes
 
