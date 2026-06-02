@@ -128,8 +128,9 @@ so security reporting and dependency visibility should be enabled early.
   when the branches diverge (for example after a hotfix); it needs
   `pull-requests: write`.
 - Pin third-party actions by SHA when workflows grow beyond simple trusted
-  actions. Both current workflows use only the GitHub CLI and no third-party
-  actions.
+  actions. The current policy/sync workflows (`pr-base-guard`,
+  `pr-metadata-guard`, and `sync-main-to-dev`) use inline shell, the GitHub CLI,
+  and no third-party actions.
 
 Rationale: required checks are useful only after workflows exist; enabling them
 too early can block all merges.

@@ -13,9 +13,30 @@ and the first local `rig` command plus `install.sh` bootstrap foundation exist.
 The MVP can validate the catalog, list tools, run diagnostics, and render dry-run
 plans. It does **not** perform real workstation package installs yet.
 
-Do not run a remote installer for this repository until `install.sh` exists in
-`main` and you have reviewed it. Local dry-run testing from a clone is the safe
-path while v1 is being built.
+Current MVP implementation:
+
+- `install.sh --dry-run` renders the bootstrap plan without creating files, and
+  `install.sh` can install or update the local `rig` command.
+- `rig list`, `rig doctor`, `rig dry-run`, `rig install --dry-run`,
+  `rig self-update`, and `rig version` are implemented.
+- Dry-run output previews the selected Brewfile entries, external install plan,
+  macOS defaults, and shell/profile edits without writing them.
+- TSV catalog validation, multi-select flags, category/default filtering,
+  macOS guards, bootstrap URL/branch checks, and command-path conflict checks are
+  covered by local tests.
+
+Remaining v1 work:
+
+- real workstation package installation through Homebrew/Homebrew Bundle;
+- interactive prompts with optional `gum` and a plain Bash fallback;
+- writing and replaying `~/.config/rig/Brewfile`, external install-plan state,
+  and `macos-defaults.sh`;
+- a broader v1 catalog, supported version prompts, `rig update-tools`, and
+  opt-in Homebrew auto-update setup.
+
+The remote install one-liner reads `install.sh` from `main`. Review that exact
+script before running it. Local dry-run testing from a clone is the safe path
+while v1 is being built.
 
 ## Planned v1 Shape
 
@@ -77,13 +98,16 @@ rig version
 ## Local Validation
 
 ```bash
-bash tests/run-tests.sh
 for f in install.sh rig lib/rig/*.sh scripts/*.sh tests/*.sh; do
   bash -n "$f"
 done
+bash tests/run-tests.sh
 ./scripts/validate-catalog.sh
+./rig dry-run --select vscode,chrome,node-npm --defaults finder-show-hidden-files
 ./install.sh --dry-run
-./rig dry-run
+shellcheck install.sh rig lib/rig/*.sh scripts/*.sh tests/*.sh
+actionlint .github/workflows/*.yml
+git diff --check
 ```
 
 ## Design Principles
