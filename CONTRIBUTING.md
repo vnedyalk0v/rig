@@ -59,6 +59,11 @@ Pull requests into `main` are only accepted from `dev` or `hotfix/*` and only
 from this repository; this is enforced by the `verify-base` GitHub Actions
 check (`.github/workflows/pr-base-guard.yml`).
 
+Merge methods: feature pull requests are **squash-merged** into `dev`, while
+`dev <-> main` promotions and back-merges are **merge-committed** so the two
+long-lived branches keep a shared ancestor (squash-promoting between them
+creates phantom conflicts).
+
 ### Keeping `dev` in sync after a hotfix
 
 A `hotfix/*` branch lands on `main` without going through `dev`, so `dev` would

@@ -19,7 +19,9 @@ rationale for a public open-source repository.
 - Wiki: disabled.
 - Discussions: disabled.
 - Pages: disabled.
-- Merge methods: squash only (merge commits and rebase merges disabled).
+- Merge methods: squash and merge commit enabled, rebase disabled. Feature
+  pull requests squash into `dev`; `dev <-> main` promotions and back-merges use
+  merge commits to preserve a shared ancestor.
 - Auto-merge: disabled.
 - Delete branch on merge: enabled.
 - Actions: enabled with all actions allowed.
@@ -92,14 +94,16 @@ unmaintained wiki or unused project board.
 
 ### Merge Policy
 
-- Squash merge enabled.
-- Merge commits disabled.
+- Squash merge enabled (used for feature -> `dev` pull requests).
+- Merge commit enabled (used for `dev` <-> `main` promotions and back-merges).
 - Rebase merge disabled.
 - Auto-merge disabled.
 - Pull requests required for `main` and `dev`.
 
-Rationale: squash-only merges keep public history readable and match the
-rulesets' allowed merge method.
+Rationale: feature pull requests squash into `dev` for a readable history, while
+`dev` and `main` are promoted with merge commits so the two long-lived branches
+keep a shared ancestor. Squash-promoting between long-lived branches produces
+phantom add/add conflicts, so promotions and back-merges must use merge commits.
 
 ### Security And Analysis
 
