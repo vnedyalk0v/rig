@@ -17,12 +17,13 @@ so safety is not optional. Prioritize in this order:
 ## Project Overview
 
 `rig` is a small macOS-only DevOps bootstrap tool ("rig up your Mac"). A
-one-command `install.sh` entrypoint verifies macOS, sets up Homebrew, and runs a
-category-based, multi-select installer with interactive, non-interactive, and
-dry-run modes.
+one-command `install.sh` entrypoint verifies macOS and installs/updates the
+local `rig` command. The current MVP validates the TSV catalog, lists tools,
+runs diagnostics, and renders side-effect-free dry-run plans.
 
-- **Status:** Pre-release. The spec is written; **no installer or `rig` command
-  exists yet.** This repo is currently documentation only.
+- **Status:** Pre-release MVP. The installer and `rig` command exist, but real
+  workstation package installs are intentionally deferred. `rig install`
+  without `--dry-run` exits with a deferred message.
 - **Source of truth:** [`docs/rig-v1-spec.md`](docs/rig-v1-spec.md). Read it
   before any change. If a change conflicts with the spec, either align with the
   spec or update the spec in the same change — never let them drift.
@@ -44,23 +45,35 @@ dry-run modes.
 - `CONTRIBUTING.md` — contribution rules and validation commands.
 - `SECURITY.md` — installer/supply-chain security expectations.
 - `.github/ISSUE_TEMPLATE/`, `.github/pull_request_template.md` — issue/PR formats.
-- `.github/workflows/pr-base-guard.yml` — `verify-base` check (only `dev`/`hotfix/*` may target `main`).
+- `.github/workflows/pr-base-guard.yml` — `verify-base` check (only
+  `dev`/`hotfix/*` may target `main`).
 - `.github/workflows/sync-main-to-dev.yml` — opens a `main -> dev` back-merge PR after a hotfix.
 - `.coderabbit.yaml` — CodeRabbit review configuration.
-- *(Planned)* `install.sh`, `rig`, catalog `.tsv`, `macos-defaults.sh`.
+- `install.sh` — remote bootstrap foundation; dry-run must remain mutation-free.
+- `rig` — extensionless Bash 3.2-compatible CLI.
+- `lib/rig/` — shared Bash modules for catalog parsing, dry-run rendering, and
+  diagnostics.
+- `catalog/*.tsv` — tool and macOS defaults catalogs.
+- `scripts/validate-catalog.sh` — TSV validation.
+- `tests/run-tests.sh` — shell behavior tests.
+- *(Planned)* generated `macos-defaults.sh` under `~/.config/rig/`.
 
 ## Key Commands
 
-There is no build system. Validate work with the lightest sufficient check.
+There is no build system. Validate work with the lightest sufficient check while
+editing, then run the full local gate before committing or pushing.
 
 - **Docs changes:** verify internal links and cross-references resolve; keep
   claims consistent with `docs/rig-v1-spec.md`.
-- **Shell scripts (once they exist):**
+- **Shell scripts:**
 
 ```bash
-bash -n install.sh            # syntax check, no execution
-bash -n path/to/script.sh
-shellcheck install.sh         # if available
+for f in install.sh rig lib/rig/*.sh scripts/*.sh tests/*.sh; do
+  bash -n "$f"                # syntax check, no execution
+done
+bash tests/run-tests.sh
+shellcheck install.sh rig lib/rig/*.sh scripts/*.sh tests/*.sh
+actionlint .github/workflows/*.yml
 ./install.sh --dry-run        # must make zero system/user changes
 ./rig dry-run
 ```
@@ -68,19 +81,75 @@ shellcheck install.sh         # if available
 - **Catalog (TSV):** prove it is parseable with built-in `while read` and that
   every selectable item has a non-empty `description` field.
 
+```bash
+./scripts/validate-catalog.sh
+```
+
+- **Before commit or push:** run the full local gate and do not commit or push
+  unless it passes:
+
+```bash
+for f in install.sh rig lib/rig/*.sh scripts/*.sh tests/*.sh; do
+  bash -n "$f"
+done
+bash tests/run-tests.sh
+./scripts/validate-catalog.sh
+./rig dry-run --select vscode,chrome,node-npm --defaults finder-show-hidden-files
+./install.sh --dry-run
+shellcheck install.sh rig lib/rig/*.sh scripts/*.sh tests/*.sh
+actionlint .github/workflows/*.yml
+git diff --check
+```
+
 ## Code Style & Conventions
 
 - **Bash 3.2 only** for any code that runs on a clean Mac. Do **not** use:
   associative arrays (`declare -A`), `mapfile`/`readarray`, case-modification
   expansions (`${var^^}`, `${var,,}`), namerefs (`local -n`), or `;&`/`;;&`
   case fall-through. These are Bash 4+ and absent on macOS `/bin/bash` (3.2.57).
+- Declare function-scoped variables with `local` before first use. Bash 3.2
+  supports `local`; avoid leaking helper variables into the global namespace.
 - Always quote variable expansions; treat all user/catalog input as untrusted.
+- When intentional word splitting is required for untrusted input, explicitly
+  control shell state. Disable pathname expansion with `set -f`, preserve/restore
+  the previous globbing state and `IFS`, and add a regression test for glob
+  characters such as `*`, `?`, and `[`.
 - Make shell-startup edits **idempotent** using managed marker blocks; detect the
   user's real login shell before editing `~/.zshrc` vs `~/.bash_profile`.
 - Keep `install.sh` small and readable — it is downloaded and run via `curl`.
 - Comments explain intent or non-obvious constraints only; do not narrate code.
+  Do not add boilerplate shell "docstrings" just to satisfy generic reviewer
+  coverage metrics.
 - Markdown: wrap prose at a sane width, use backticks for files/commands, keep
   the existing tone of the surrounding docs.
+
+## Reviewer-Learned Guardrails
+
+These are recurring pitfalls caught by AI reviewers. Treat them as pre-flight
+checks before opening or updating a PR.
+
+- **Workflow guards must run trusted code.** For `pull_request` workflows that
+  enforce branch, title, or publishing policy, do not check out and execute
+  scripts from the PR branch. Inline the validation from event metadata, or run
+  trusted code from the protected base ref.
+- **Third-party Actions must be hardened.** If a workflow uses an external
+  action, pin it to a full commit SHA. For `actions/checkout`, set
+  `persist-credentials: false` unless the job truly needs persisted credentials.
+- **Clone URLs are executable inputs.** Validate any user-provided repository URL
+  before `git clone`, `git fetch`, or dry-run display. Allow only reviewed
+  transports such as `https://...` or the intended GitHub SSH form; reject
+  `ext::`, `file://`, and other unexpected transports.
+- **macOS-only behavior still needs portable tests.** Tests that exercise
+  `uname -s` behavior must either stub the OS check or assert the expected
+  non-Darwin failure. Do not assume CI or reviewers run on macOS.
+- **Cleanup must survive failing assertions.** If a test changes permissions
+  such as making a temp HOME read-only, the `trap` cleanup must restore writable
+  permissions before `rm -rf`; do not rely only on in-test restoration after the
+  assertion.
+- **Review warnings are not automatically requirements.** Verify every external
+  reviewer finding against this repo, the spec, and these instructions. Fix true
+  issues, and reply with a short technical reason when a finding is a
+  false-positive or would add low-signal code.
 
 ## Boundaries
 
@@ -122,8 +191,22 @@ shellcheck install.sh         # if available
   release branch. Branch off `dev` and open pull requests against `dev`. Only
   `dev` and `hotfix/*` branches may target `main`, and the `verify-base` check
   enforces this.
+- **Publishing guard:** never use tool/plugin default prefixes such as
+  `codex/`. Feature branch names must use the repo prefix style:
+  `feat/*`, `fix/*`, `bug/*`, `docs/*`, `chore/*`, `ci/*`, or
+  `refactor/*`. The only non-feature PR into `dev` is the `main -> dev` sync.
 - Use the issue/PR title style already in the repo (`feat:`, `bug:`/`fix:`) and
   complete the `.github/pull_request_template.md` checklist.
+- Before pushing or opening a pull request, explicitly check:
+
+```bash
+git branch --show-current
+git status --short --branch
+```
+
+  Confirm the branch name, PR title, and PR base match this section before
+  running `git push` or `gh pr create`. Also confirm the full local gate in
+  **Key Commands** passed after the final code change.
 - Document user-facing behavior changes in `README.md` or the relevant linked doc.
 - Flag security-relevant changes against `SECURITY.md`.
 - CodeRabbit reviews every pull request via `.coderabbit.yaml`; resolve or

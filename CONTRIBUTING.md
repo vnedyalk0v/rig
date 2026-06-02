@@ -59,6 +59,22 @@ Pull requests into `main` are only accepted from `dev` or `hotfix/*` and only
 from this repository; this is enforced by the `verify-base` GitHub Actions
 check (`.github/workflows/pr-base-guard.yml`).
 
+Feature branch names targeting `dev` must use one of these prefixes:
+`feat/`, `fix/`, `bug/`, `docs/`, `chore/`, `ci/`, or `refactor/`. Do not use
+tool-specific prefixes such as `codex/`. Pull request titles must start with
+the matching conventional prefix: `feat:`, `fix:`, `bug:`, `docs:`, `chore:`,
+`ci:`, or `refactor:`.
+
+Before pushing or opening a pull request, check:
+
+```bash
+git branch --show-current
+git status --short --branch
+```
+
+The `pr-metadata-guard` workflow (`.github/workflows/pr-metadata-guard.yml`)
+enforces these branch and title rules.
+
 Merge methods: feature pull requests are **squash-merged** into `dev`, while
 `dev <-> main` promotions and back-merges are **merge-committed** so the two
 long-lived branches keep a shared ancestor (squash-promoting between them
@@ -99,18 +115,23 @@ Before opening a pull request, confirm:
 
 ## Validation
 
-No implementation test suite exists yet. Once scripts are added, changes should
-include focused validation such as:
+There is no build system. Use the shell test harness and focused syntax checks:
 
 ```bash
-bash -n install.sh
-bash -n path/to/script.sh
+bash tests/run-tests.sh
+for f in install.sh rig lib/rig/*.sh scripts/*.sh tests/*.sh; do
+  bash -n "$f"
+done
 ./install.sh --dry-run
 ./rig dry-run
 ```
 
 Catalog changes should also be validated by a command or script that proves the
 TSV shape is parseable and every selectable item has a description.
+
+```bash
+./scripts/validate-catalog.sh
+```
 
 ## Issues
 

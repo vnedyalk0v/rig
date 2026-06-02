@@ -1,0 +1,75 @@
+name: PR metadata guard
+
+# Enforces repository publishing conventions before a pull request can be
+# merged. This catches branch names and PR titles that drift from the repo-local
+# rules in AGENTS.md and CONTRIBUTING.md.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  verify-pr-metadata:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce branch and title policy
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+        run: |
+          failures=0
+
+          error() {
+            echo "::error::$*"
+            failures=$((failures + 1))
+          }
+
+          case "$BASE_REF" in
+            dev)
+              case "$HEAD_REF" in
+                main)
+                  if [ "$HEAD_REPO" != "$BASE_REPO" ]; then
+                    error "main -> dev sync pull requests must originate from this repository, not a fork."
+                  fi
+                  ;;
+                feat/*|fix/*|bug/*|docs/*|chore/*|ci/*|refactor/*)
+                  ;;
+                *)
+                  error "Pull requests into 'dev' must use a feature branch prefix: feat/, fix/, bug/, docs/, chore/, ci/, or refactor/. The only non-feature exception is main -> dev sync."
+                  ;;
+              esac
+              ;;
+            main)
+              if [ "$HEAD_REPO" != "$BASE_REPO" ]; then
+                error "Pull requests into 'main' must originate from this repository, not a fork."
+              fi
+              case "$HEAD_REF" in
+                dev|hotfix/*)
+                  ;;
+                *)
+                  error "Pull requests into 'main' are only allowed from 'dev' or 'hotfix/*'. Open feature work against 'dev' instead."
+                  ;;
+              esac
+              ;;
+          esac
+
+          case "$PR_TITLE" in
+            feat:\ *|fix:\ *|bug:\ *|docs:\ *|chore:\ *|ci:\ *|refactor:\ *)
+              ;;
+            *)
+              error "Pull request title must start with one of: feat:, fix:, bug:, docs:, chore:, ci:, or refactor:."
+              ;;
+          esac
+
+          if [ "$failures" -ne 0 ]; then
+            echo "PR metadata policy failed with $failures issue(s)."
+            exit 1
+          fi
+
+          echo "PR metadata policy passed"
