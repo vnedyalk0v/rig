@@ -73,6 +73,7 @@ rig version
 - [Security policy](SECURITY.md)
 - [Support guide](SUPPORT.md)
 - [Code of conduct](CODE_OF_CONDUCT.md)
+- [Agent instructions](AGENTS.md) — guidance for AI coding agents
 
 ## Contributing
 

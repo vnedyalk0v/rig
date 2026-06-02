@@ -25,10 +25,10 @@ open-source repository.
 - Secret scanning push protection: enabled.
 - Dependabot security updates: disabled.
 - Dependabot vulnerability alerts: disabled.
-- Community profile health: 42%.
-- Community files detected: `README.md` and `LICENSE`.
-- Missing community files: `CONTRIBUTING.md`, `SECURITY.md`,
-  `CODE_OF_CONDUCT.md`, issue templates, and pull request template.
+- Community profile health: 100%.
+- Community files present: `README.md`, `LICENSE`, `CONTRIBUTING.md`,
+  `SECURITY.md`, `CODE_OF_CONDUCT.md`, `SUPPORT.md`, issue templates under
+  `.github/ISSUE_TEMPLATE/`, and `.github/pull_request_template.md`.
 - Active repository ruleset: `Protect main`.
 
 ## Ruleset Finding
