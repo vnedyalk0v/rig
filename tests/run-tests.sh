@@ -159,9 +159,19 @@ assert_success "$?" "rig install --help is honored in any position"
 assert_contains "$out" "Usage: rig install" "install help is shown regardless of argument position"
 
 out="$TEST_TMP/shell-edit-detection.out"
-SHELL=/bin/zsh run_capture "$out" ./rig dry-run --select node-npm
+RIG_LOGIN_SHELL=/bin/zsh run_capture "$out" ./rig dry-run --select node-npm
 assert_success "$?" "dry-run with version-manager selection succeeds"
 assert_contains "$out" "Would add managed rig initialization block" "shell-edit detection fires for version-manager selection"
+
+invalid_mas_catalog="$TEST_TMP/invalid-mas-tools.tsv"
+{
+  printf 'category\tid\tlabel\tkind\tpackage\tdefault\tdescription\tversion_strategy\tversions\tnotes\n'
+  printf 'productivity\tbad-mas\tBad MAS\tmas\tnot-a-number\tno\tInvalid mas id\thomebrew-latest\t\t\n'
+} >"$invalid_mas_catalog"
+out="$TEST_TMP/catalog-invalid-mas.out"
+run_capture "$out" ./scripts/validate-catalog.sh --tools "$invalid_mas_catalog"
+assert_failure "$?" "catalog validation rejects non-numeric mas ids"
+assert_contains "$out" "invalid mas id: not-a-number" "invalid mas id is reported"
 
 fake_git_bin="$TEST_TMP/fake-git-bin"
 fake_git_log="$TEST_TMP/self-update-git.log"

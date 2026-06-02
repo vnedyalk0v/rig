@@ -159,20 +159,20 @@ rig_render_brewfile_line() {
 
   case "$kind" in
     formula)
-      printf 'brew "%s"\n' "$package"
+      printf 'brew "%s"\n' "$(rig_escape_brew_string "$package")"
       ;;
     cask)
-      printf 'cask "%s"\n' "$package"
+      printf 'cask "%s"\n' "$(rig_escape_brew_string "$package")"
       ;;
     mas)
-      printf 'mas "%s", id: %s\n' "$label" "$package"
+      printf 'mas "%s", id: %s\n' "$(rig_escape_brew_string "$label")" "$package"
       ;;
     vscode)
-      printf 'vscode "%s"\n' "$package"
+      printf 'vscode "%s"\n' "$(rig_escape_brew_string "$package")"
       ;;
     tap-formula)
-      tap_name=${package%/*}
-      formula_name=${package##*/}
+      tap_name=$(rig_escape_brew_string "${package%/*}")
+      formula_name=$(rig_escape_brew_string "${package##*/}")
       printf 'tap "%s"\n' "$tap_name"
       printf 'brew "%s"\n' "$formula_name"
       ;;
@@ -182,7 +182,7 @@ rig_render_brewfile_line() {
 rig_render_dry_run() {
   local select_arg defaults_arg category_filter selected_tools selected_defaults
   local brewfile_count external_count shell_edit_count defaults_count
-  local selected_id selected_default row profile_path selected_version
+  local selected_id selected_default row profile_path selected_version login_shell
   local _category _id id label kind package _default_flag _description
   local _version_strategy version_strategy _versions versions _notes
   local _label command_text _restart_hint
@@ -325,6 +325,10 @@ EOF
       printf 'No shell/profile edits selected.\n'
     fi
   else
-    printf 'Unsupported login shell: %s. rig would warn instead of editing shell files.\n' "${SHELL:-unknown}"
+    if login_shell=$(rig_login_shell 2>/dev/null); then
+      printf 'Unsupported login shell: %s. rig would warn instead of editing shell files.\n' "$(basename "$login_shell")"
+    else
+      printf 'Unsupported login shell: unknown. rig would warn instead of editing shell files.\n'
+    fi
   fi
 }

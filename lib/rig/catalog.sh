@@ -174,6 +174,14 @@ EOF
     rig_print_error "$catalog_path:$line_no: package is required"
     return 1
   fi
+  if [ "$kind" = "mas" ]; then
+    case "$package" in
+      ""|*[!0-9]*)
+        rig_print_error "$catalog_path:$line_no: invalid mas id: $package"
+        return 1
+        ;;
+    esac
+  fi
   if ! rig_validate_default_flag "$default_flag"; then
     rig_print_error "$catalog_path:$line_no: invalid default flag: $default_flag"
     return 1
