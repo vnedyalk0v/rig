@@ -129,8 +129,9 @@ so security reporting and dependency visibility should be enabled early.
   `pull-requests: write`.
 - Pin third-party actions by SHA when workflows grow beyond simple trusted
   actions. The current policy/sync workflows (`pr-base-guard`,
-  `pr-metadata-guard`, and `sync-main-to-dev`) use inline shell, the GitHub CLI,
-  and no third-party actions.
+  `pr-metadata-guard`, and `sync-main-to-dev`) use inline shell and no
+  third-party actions; `sync-main-to-dev` additionally uses `gh api`,
+  `gh pr list`, and `gh pr create`.
 
 Rationale: required checks are useful only after workflows exist; enabling them
 too early can block all merges.
