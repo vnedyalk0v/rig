@@ -37,16 +37,21 @@ reviews:
     drafts: false
     base_branches:
       - main
-      - dev
 
   path_instructions:
     - path: "install.sh"
       instructions: >-
-        Remote entrypoint downloaded and executed via curl | bash. Keep it small
-        and readable. Require: macOS guard (exit unless `uname -s` is Darwin),
-        Bash 3.2 compatibility, safe quoting of every expansion, argument parsing
-        (including --dry-run) before any install/clone step, and that --dry-run
-        installs nothing, clones nothing, and writes nothing.
+        Remote entrypoint downloaded with curl and executed by bash. Keep it
+        small and readable. Require: macOS guard (exit unless `uname -s` is
+        Darwin), Bash 3.2 compatibility, safe quoting of every expansion,
+        argument parsing (including --dry-run) before any install/clone step,
+        and that --dry-run installs nothing, clones nothing, and writes nothing.
+    - path: "rig"
+      instructions: >-
+        Planned extensionless Bash 3.2-compatible CLI. Apply the same shell
+        safety bar as `**/*.sh`: quote all expansions, avoid Bash 4+ features,
+        keep generated shell/config edits idempotent, and keep dry-run paths
+        free of package, system, and user-configuration side effects.
     - path: "**/*.sh"
       instructions: >-
         Bash 3.2-compatible only. Flag Bash 4+ features: associative arrays
