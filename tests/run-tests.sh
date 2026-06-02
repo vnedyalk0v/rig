@@ -148,6 +148,21 @@ run_capture "$out" ./rig install
 assert_failure "$?" "rig install without dry-run is deferred"
 assert_contains "$out" "real installs are deferred in this MVP" "deferred install message is clear"
 
+out="$TEST_TMP/install-unknown-arg.out"
+run_capture "$out" ./rig install --bogus
+assert_failure "$?" "rig install rejects unknown arguments"
+assert_contains "$out" "unknown install argument: --bogus" "unknown install argument is reported"
+
+out="$TEST_TMP/install-help-anywhere.out"
+run_capture "$out" ./rig install --select vscode --help
+assert_success "$?" "rig install --help is honored in any position"
+assert_contains "$out" "Usage: rig install" "install help is shown regardless of argument position"
+
+out="$TEST_TMP/shell-edit-detection.out"
+SHELL=/bin/zsh run_capture "$out" ./rig dry-run --select node-npm
+assert_success "$?" "dry-run with version-manager selection succeeds"
+assert_contains "$out" "Would add managed rig initialization block" "shell-edit detection fires for version-manager selection"
+
 fake_git_bin="$TEST_TMP/fake-git-bin"
 fake_git_log="$TEST_TMP/self-update-git.log"
 mkdir -p "$fake_git_bin"

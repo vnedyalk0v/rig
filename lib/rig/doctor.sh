@@ -1,6 +1,7 @@
 #!/bin/bash
 
 rig_doctor() {
+  local failures home_path
   failures=0
 
   printf 'rig doctor\n'

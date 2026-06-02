@@ -1,6 +1,8 @@
 #!/bin/bash
 
 rig_print_list() {
+  local category_filter
+  local category id label kind package default_flag description version_strategy _versions _notes
   category_filter=
 
   while [ "$#" -gt 0 ]; do
@@ -38,6 +40,7 @@ EOF
 }
 
 rig_seen_contains() {
+  local seen wanted
   seen=$1
   wanted=$2
   case "$seen" in
@@ -51,6 +54,8 @@ $wanted
 }
 
 rig_collect_selected_tools() {
+  local select_arg category_filter seen selected_id row
+  local category id _id _label _kind _package default_flag _default_flag _description _version_strategy _versions _notes
   select_arg=$1
   category_filter=$2
   seen='
@@ -102,6 +107,7 @@ EOF
 }
 
 rig_collect_selected_defaults() {
+  local defaults_arg seen selected_id
   defaults_arg=$1
   seen='
 '
@@ -134,21 +140,22 @@ $(rig_join_csv_as_lines "$defaults_arg")
 EOF
 }
 
-rig_default_version_for_strategy() {
-  strategy=$1
-  case "$strategy" in
-    nvm|tenv|bun-installer|homebrew-or-vendor|npm-or-vendor|homebrew-channel)
-      printf 'latest\n'
-      ;;
-    *)
-      printf 'latest\n'
-      ;;
-  esac
+rig_default_version() {
+  local versions first
+  versions=$1
+  first=${versions%%,*}
+  if [ "$first" != "" ]; then
+    printf '%s\n' "$first"
+  else
+    printf 'latest\n'
+  fi
 }
 
 rig_render_brewfile_line() {
+  local kind package label tap_name formula_name
   kind=$1
   package=$2
+  label=$3
 
   case "$kind" in
     formula)
@@ -158,7 +165,7 @@ rig_render_brewfile_line() {
       printf 'cask "%s"\n' "$package"
       ;;
     mas)
-      printf 'mas "%s"\n' "$package"
+      printf 'mas "%s", id: %s\n' "$label" "$package"
       ;;
     vscode)
       printf 'vscode "%s"\n' "$package"
@@ -173,6 +180,12 @@ rig_render_brewfile_line() {
 }
 
 rig_render_dry_run() {
+  local select_arg defaults_arg category_filter selected_tools selected_defaults
+  local brewfile_count external_count shell_edit_count defaults_count
+  local selected_id selected_default row profile_path selected_version
+  local _category _id id label kind package _default_flag _description
+  local _version_strategy version_strategy _versions versions _notes
+  local _label command_text _restart_hint
   select_arg=
   defaults_arg=
   category_filter=
@@ -236,12 +249,12 @@ rig_render_dry_run() {
       continue
     fi
     row=$(rig_lookup_tool "$selected_id")
-    IFS="$RIG_TSV_DELIMITER" read -r _category _id _label kind package _default_flag _description _version_strategy _versions _notes <<EOF
+    IFS="$RIG_TSV_DELIMITER" read -r _category _id label kind package _default_flag _description _version_strategy _versions _notes <<EOF
 $row
 EOF
     case "$kind" in
       formula|cask|tap-formula|mas|vscode)
-        rig_render_brewfile_line "$kind" "$package"
+        rig_render_brewfile_line "$kind" "$package" "$label"
         brewfile_count=$((brewfile_count + 1))
         ;;
     esac
@@ -261,16 +274,16 @@ EOF
       continue
     fi
     row=$(rig_lookup_tool "$selected_id")
-    IFS="$RIG_TSV_DELIMITER" read -r _category id label kind package _default_flag _description version_strategy _versions _notes <<EOF
+    IFS="$RIG_TSV_DELIMITER" read -r _category id label kind package _default_flag _description version_strategy versions _notes <<EOF
 $row
 EOF
     case "$kind" in
       external|version-manager)
-        selected_version=$(rig_default_version_for_strategy "$version_strategy")
+        selected_version=$(rig_default_version "$versions")
         printf '%s\t%s\t%s\t%s\n' "$id" "$package" "$selected_version" "$label"
         external_count=$((external_count + 1))
-        case "$package" in
-          nvm|tenv|bun.com/install)
+        case "$version_strategy" in
+          nvm|tenv|bun-installer)
             shell_edit_count=$((shell_edit_count + 1))
             ;;
         esac

@@ -36,20 +36,8 @@ Notes:
 EOF
 }
 
-rig_resolve_root() {
-  source_path=$1
-  while [ -L "$source_path" ]; do
-    source_dir=$(CDPATH='' cd -P -- "$(dirname -- "$source_path")" && pwd)
-    target_path=$(readlink "$source_path")
-    case "$target_path" in
-      /*) source_path=$target_path ;;
-      *) source_path=$source_dir/$target_path ;;
-    esac
-  done
-  CDPATH='' cd -P -- "$(dirname -- "$source_path")" && pwd
-}
-
 rig_profile_path() {
+  local shell_name
   if [ "${HOME:-}" = "" ]; then
     return 1
   fi
@@ -68,6 +56,7 @@ rig_profile_path() {
 }
 
 rig_join_csv_as_lines() {
+  local value old_ifs glob_was_disabled item
   value=$1
   old_ifs=$IFS
   case "$-" in
