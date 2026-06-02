@@ -144,14 +144,21 @@ run_capture "$out" ./rig install
 assert_failure "$?" "rig install without dry-run is deferred"
 assert_contains "$out" "real installs are deferred in this MVP" "deferred install message is clear"
 
-doctor_home="$TEST_TMP/readonly-home"
-mkdir -p "$doctor_home"
-chmod 500 "$doctor_home"
-out="$TEST_TMP/doctor-readonly-home.out"
-HOME="$doctor_home" run_capture "$out" ./rig doctor
-assert_success "$?" "rig doctor warns but does not fail for read-only HOME in MVP"
-assert_contains "$out" "warning: HOME is not writable" "doctor reports read-only HOME warning"
-chmod 700 "$doctor_home"
+if [ "$(uname -s 2>/dev/null)" = "Darwin" ]; then
+  doctor_home="$TEST_TMP/readonly-home"
+  mkdir -p "$doctor_home"
+  chmod 500 "$doctor_home"
+  out="$TEST_TMP/doctor-readonly-home.out"
+  HOME="$doctor_home" run_capture "$out" ./rig doctor
+  assert_success "$?" "rig doctor warns but does not fail for read-only HOME in MVP"
+  assert_contains "$out" "warning: HOME is not writable" "doctor reports read-only HOME warning"
+  chmod 700 "$doctor_home"
+else
+  out="$TEST_TMP/doctor-non-macos.out"
+  run_capture "$out" ./rig doctor
+  assert_failure "$?" "rig doctor fails clearly on non-macOS"
+  assert_contains "$out" "rig supports macOS only" "doctor reports macOS-only guard"
+fi
 
 out="$TEST_TMP/unknown-selection.out"
 run_capture "$out" ./rig dry-run --select does-not-exist

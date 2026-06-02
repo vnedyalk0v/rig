@@ -59,7 +59,8 @@ runs diagnostics, and renders side-effect-free dry-run plans.
 
 ## Key Commands
 
-There is no build system. Validate work with the lightest sufficient check.
+There is no build system. Validate work with the lightest sufficient check while
+editing, then run the full local gate before committing or pushing.
 
 - **Docs changes:** verify internal links and cross-references resolve; keep
   claims consistent with `docs/rig-v1-spec.md`.
@@ -69,8 +70,9 @@ There is no build system. Validate work with the lightest sufficient check.
 for f in install.sh rig lib/rig/*.sh scripts/*.sh tests/*.sh; do
   bash -n "$f"                # syntax check, no execution
 done
-shellcheck install.sh         # if available
 bash tests/run-tests.sh
+shellcheck install.sh rig lib/rig/*.sh scripts/*.sh tests/*.sh
+actionlint .github/workflows/*.yml
 ./install.sh --dry-run        # must make zero system/user changes
 ./rig dry-run
 ```
@@ -80,6 +82,22 @@ bash tests/run-tests.sh
 
 ```bash
 ./scripts/validate-catalog.sh
+```
+
+- **Before commit or push:** run the full local gate and do not commit or push
+  unless it passes:
+
+```bash
+for f in install.sh rig lib/rig/*.sh scripts/*.sh tests/*.sh; do
+  bash -n "$f"
+done
+bash tests/run-tests.sh
+./scripts/validate-catalog.sh
+./rig dry-run --select vscode,chrome,node-npm --defaults finder-show-hidden-files
+./install.sh --dry-run
+shellcheck install.sh rig lib/rig/*.sh scripts/*.sh tests/*.sh
+actionlint .github/workflows/*.yml
+git diff --check
 ```
 
 ## Code Style & Conventions
@@ -150,7 +168,8 @@ git status --short --branch
 ```
 
   Confirm the branch name, PR title, and PR base match this section before
-  running `git push` or `gh pr create`.
+  running `git push` or `gh pr create`. Also confirm the full local gate in
+  **Key Commands** passed after the final code change.
 - Document user-facing behavior changes in `README.md` or the relevant linked doc.
 - Flag security-relevant changes against `SECURITY.md`.
 - CodeRabbit reviews every pull request via `.coderabbit.yaml`; resolve or
