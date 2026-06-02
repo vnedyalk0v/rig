@@ -100,7 +100,7 @@ rig_apply_bun_installer() {
 }
 
 rig_apply_install_plan() {
-  local plan_file line id strategy package version _label shell_needed
+  local plan_file line id strategy package version _label shell_needed profile_path
   plan_file=$1
   shell_needed=no
   if [ ! -f "$plan_file" ]; then
@@ -108,7 +108,7 @@ rig_apply_install_plan() {
   fi
   while IFS= read -r line || [ "$line" != "" ]; do
     case "$line" in
-      ""|id*)
+      ""|"id"$'\t'*)
         continue
         ;;
     esac

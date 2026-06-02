@@ -42,6 +42,11 @@ rig_install_command() {
     return 0
   fi
 
+  if rig_args_include --help "$@" || rig_args_include -h "$@"; then
+    rig_run_install "$@"
+    return $?
+  fi
+
   if ! rig_args_include --dry-run "$@"; then
     rig_require_macos || return 1
   fi

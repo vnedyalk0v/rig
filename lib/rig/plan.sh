@@ -659,7 +659,7 @@ rig_count_shell_edits_from_plan_file() {
   fi
   while IFS= read -r line || [ "$line" != "" ]; do
     case "$line" in
-      ""|id*)
+      ""|"id"$'\t'*)
         continue
         ;;
     esac
@@ -708,7 +708,7 @@ rig_render_dry_run_from_config() {
   if [ -f "$plan_file" ]; then
     while IFS= read -r line || [ "$line" != "" ]; do
       case "$line" in
-        ""|id*)
+        ""|"id"$'\t'*)
           continue
           ;;
       esac

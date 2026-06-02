@@ -16,7 +16,7 @@ rig_prompt_yes_no() {
         ;;
     esac
   fi
-  printf '%s [y/N]: ' "$prompt"
+  printf '%s [y/N]: ' "$prompt" >&2
   IFS= read -r reply
   case "$reply" in
     y|Y|yes|YES)
@@ -89,16 +89,16 @@ rig_prompt_tools_for_category() {
     return 0
   fi
 
-  printf 'Category: %s\n' "$category"
+  printf 'Category: %s\n' "$category" >&2
   index=1
   printf '%s\n' "$items" | while IFS='|' read -r tool_id tool_label tool_description; do
     if [ "$tool_id" = "" ]; then
       continue
     fi
-    printf '  %s) %s - %s\n' "$index" "$tool_label" "$tool_description"
+    printf '  %s) %s - %s\n' "$index" "$tool_label" "$tool_description" >&2
     index=$((index + 1))
   done
-  printf 'Enter numbers or ids (comma/space separated, blank to skip): '
+  printf 'Enter numbers or ids (comma/space separated, blank to skip): ' >&2
   IFS= read -r choice
   if [ "$choice" = "" ]; then
     return 0
@@ -146,14 +146,14 @@ rig_prompt_version() {
     fi
     return 0
   fi
-  printf 'Choose version for %s:\n' "$tool_id"
+  printf 'Choose version for %s:\n' "$tool_id" >&2
   while IFS= read -r version || [ "$version" != "" ]; do
     if [ "$version" = "" ]; then
       continue
     fi
-    printf '  - %s\n' "$version"
+    printf '  - %s\n' "$version" >&2
   done < <(rig_join_csv_as_lines "$versions_csv")
-  printf 'Version [latest]: '
+  printf 'Version [latest]: ' >&2
   IFS= read -r choice
   if [ "$choice" = "" ]; then
     choice=latest
@@ -185,14 +185,14 @@ rig_prompt_defaults() {
     return 0
   fi
 
-  printf 'Optional macOS preferences (enter ids comma-separated, blank to skip):\n'
+  printf 'Optional macOS preferences (enter ids comma-separated, blank to skip):\n' >&2
   printf '%s\n' "$items" | while IFS='|' read -r default_id default_label default_description; do
     if [ "$default_id" = "" ]; then
       continue
     fi
-    printf '  %s - %s\n' "$default_id" "$default_description"
+    printf '  %s - %s\n' "$default_id" "$default_description" >&2
   done
-  printf 'Defaults: '
+  printf 'Defaults: ' >&2
   IFS= read -r selected
   if [ "$selected" = "" ]; then
     return 0

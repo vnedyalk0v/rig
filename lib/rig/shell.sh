@@ -7,7 +7,7 @@ rig_shell_managed_block_content() {
   local shell_name
   shell_name=${1:-bash}
   cat <<EOF
-# >>> rig managed >>>
+$RIG_SHELL_MARKER_START
 # rig version-manager initialization (nvm, tenv, etc.)
 export NVM_DIR="\${NVM_DIR:-\$HOME/.nvm}"
 if [ -s "\$NVM_DIR/nvm.sh" ]; then
@@ -16,7 +16,7 @@ fi
 if command -v tenv >/dev/null 2>&1; then
   eval "\$(tenv hook $shell_name)"
 fi
-# <<< rig managed <<<
+$RIG_SHELL_MARKER_END
 EOF
 }
 

@@ -320,6 +320,12 @@ assert_failure "$?" "rig install guards non-macOS before install argument parsin
 assert_contains "$out" "rig supports macOS only; detected Linux" "install unknown argument reports macOS guard first on non-macOS"
 assert_not_contains "$out" "unknown install argument: --bogus" "install unknown argument does not parse unsupported platform"
 
+out="$TEST_TMP/install-help-non-macos.out"
+PATH="$fake_linux_bin:$PATH" run_capture "$out" ./rig install --select vscode --help
+assert_success "$?" "rig install --help works before macOS guard"
+assert_contains "$out" "Usage: rig install" "install help is shown on non-macOS"
+assert_not_contains "$out" "rig supports macOS only" "install help does not enforce macOS"
+
 out="$TEST_TMP/dry-run-version.out"
 PATH="$fake_darwin_bin:$PATH" run_capture "$out" ./rig dry-run --select node-npm --version node-npm=lts
 assert_success "$?" "rig dry-run with version succeeds"
@@ -389,6 +395,19 @@ PATH="$fake_darwin_bin:$fake_brew_bin:$PATH" HOME="$tampered_home" RIG_CONFIG_DI
 assert_failure "$?" "rig install --from-config rejects tampered install plan"
 assert_contains "$out" "strategy mismatch" "tampered install plan strategy mismatch is reported"
 
+id_prefixed_plan="$TEST_TMP/id-prefixed-install-plan.tsv"
+printf 'id\tstrategy\tpackage\tversion\tlabel\n' >"$id_prefixed_plan"
+printf 'id-local\tnvm\tnvm\tlatest\tId Local\n' >>"$id_prefixed_plan"
+out="$TEST_TMP/id-prefixed-install-plan-apply.out"
+RIG_ROOT="$ROOT_DIR" bash -c '
+  . "'"$ROOT_DIR"'/lib/rig/common.sh"
+  . "'"$ROOT_DIR"'/lib/rig/catalog.sh"
+  . "'"$ROOT_DIR"'/lib/rig/apply.sh"
+  rig_apply_install_plan "'"$id_prefixed_plan"'"
+' >"$out" 2>&1
+assert_failure "$?" "install-plan apply does not skip id-prefixed rows as headers"
+assert_contains "$out" "unknown catalog id: id-local" "id-prefixed apply row is validated"
+
 out="$TEST_TMP/interactive-selection-stub.out"
 PATH="$fake_darwin_bin:$PATH" RIG_ROOT="$ROOT_DIR" bash -c '
   . "'"$ROOT_DIR"'/lib/rig/common.sh"
@@ -405,6 +424,67 @@ PATH="$fake_darwin_bin:$PATH" RIG_ROOT="$ROOT_DIR" bash -c '
 ' >"$out" 2>&1
 assert_success "$?" "interactive selection stub succeeds"
 assert_contains "$out" "tools:vscode" "interactive selection stub selects vscode"
+
+prompt_stdout="$TEST_TMP/prompt-tools.stdout"
+prompt_stderr="$TEST_TMP/prompt-tools.stderr"
+PATH="$fake_darwin_bin:/usr/bin:/bin" RIG_ROOT="$ROOT_DIR" bash -c '
+  . "'"$ROOT_DIR"'/lib/rig/common.sh"
+  . "'"$ROOT_DIR"'/lib/rig/catalog.sh"
+  . "'"$ROOT_DIR"'/lib/rig/prompts.sh"
+  rig_validate_catalogs
+  printf "\n" | rig_prompt_tools_for_category ide
+' >"$prompt_stdout" 2>"$prompt_stderr"
+assert_success "$?" "plain tool prompt succeeds with blank selection"
+if [ ! -s "$prompt_stdout" ]; then
+  pass "plain tool prompt keeps stdout selection-only"
+else
+  printf '%s\n' "---- stdout ----"
+  cat "$prompt_stdout"
+  printf '%s\n' "----------------"
+  fail "plain tool prompt keeps stdout selection-only"
+fi
+assert_contains "$prompt_stderr" "Enter numbers or ids" "plain tool prompt writes menu to stderr"
+
+prompt_stdout="$TEST_TMP/prompt-version.stdout"
+prompt_stderr="$TEST_TMP/prompt-version.stderr"
+PATH="$fake_darwin_bin:/usr/bin:/bin" RIG_ROOT="$ROOT_DIR" bash -c '
+  . "'"$ROOT_DIR"'/lib/rig/common.sh"
+  . "'"$ROOT_DIR"'/lib/rig/catalog.sh"
+  . "'"$ROOT_DIR"'/lib/rig/prompts.sh"
+  rig_validate_catalogs
+  printf "lts\n" | rig_prompt_version node-npm latest,lts
+' >"$prompt_stdout" 2>"$prompt_stderr"
+assert_success "$?" "plain version prompt succeeds"
+prompt_value=$(cat "$prompt_stdout")
+if [ "$prompt_value" = "lts" ]; then
+  pass "plain version prompt keeps stdout to selected version"
+else
+  printf '%s\n' "---- stdout ----"
+  cat "$prompt_stdout"
+  printf '%s\n' "----------------"
+  fail "plain version prompt keeps stdout to selected version"
+fi
+assert_contains "$prompt_stderr" "Version [latest]" "plain version prompt writes prompt to stderr"
+
+prompt_stdout="$TEST_TMP/prompt-defaults.stdout"
+prompt_stderr="$TEST_TMP/prompt-defaults.stderr"
+PATH="$fake_darwin_bin:/usr/bin:/bin" RIG_ROOT="$ROOT_DIR" bash -c '
+  . "'"$ROOT_DIR"'/lib/rig/common.sh"
+  . "'"$ROOT_DIR"'/lib/rig/catalog.sh"
+  . "'"$ROOT_DIR"'/lib/rig/prompts.sh"
+  rig_validate_catalogs
+  printf "\n" | rig_prompt_defaults
+' >"$prompt_stdout" 2>"$prompt_stderr"
+assert_success "$?" "plain defaults prompt succeeds with blank selection"
+if [ ! -s "$prompt_stdout" ]; then
+  pass "plain defaults prompt keeps stdout selection-only"
+else
+  printf '%s\n' "---- stdout ----"
+  cat "$prompt_stdout"
+  printf '%s\n' "----------------"
+  fail "plain defaults prompt keeps stdout selection-only"
+fi
+assert_contains "$prompt_stderr" "Optional macOS preferences" "plain defaults prompt writes menu to stderr"
 
 bootstrap_git_bin="$TEST_TMP/bootstrap-git-bin"
 bootstrap_git_log="$TEST_TMP/bootstrap-git.log"
@@ -452,6 +532,17 @@ else
   fail "shell managed block remains idempotent (expected 1 block, got $managed_block_count)"
 fi
 
+out="$TEST_TMP/shell-marker-constants.out"
+RIG_ROOT="$ROOT_DIR" bash -c '
+  . "'"$ROOT_DIR"'/lib/rig/shell.sh"
+  RIG_SHELL_MARKER_START="# >>> custom rig >>>"
+  RIG_SHELL_MARKER_END="# <<< custom rig <<<"
+  rig_shell_managed_block_content zsh
+' >"$out" 2>&1
+assert_success "$?" "shell managed block renders with custom markers"
+assert_contains "$out" "# >>> custom rig >>>" "shell block start marker uses constant"
+assert_contains "$out" "# <<< custom rig <<<" "shell block end marker uses constant"
+
 out="$TEST_TMP/update-tools-help.out"
 run_capture "$out" ./rig update-tools --help
 assert_success "$?" "rig update-tools --help succeeds"
@@ -484,6 +575,19 @@ out="$TEST_TMP/shell-edit-detection.out"
 PATH="$fake_darwin_bin:$PATH" RIG_LOGIN_SHELL=/bin/zsh run_capture "$out" ./rig dry-run --select node-npm
 assert_success "$?" "dry-run with version-manager selection succeeds"
 assert_contains "$out" "Would add managed rig initialization block" "shell-edit detection fires for version-manager selection"
+
+id_prefixed_shell_plan="$TEST_TMP/id-prefixed-shell-plan.tsv"
+printf 'id\tstrategy\tpackage\tversion\tlabel\n' >"$id_prefixed_shell_plan"
+printf 'id-node\tnvm\tnvm\tlatest\tId Node\n' >>"$id_prefixed_shell_plan"
+out="$TEST_TMP/id-prefixed-shell-edit-count.out"
+RIG_ROOT="$ROOT_DIR" bash -c '
+  . "'"$ROOT_DIR"'/lib/rig/common.sh"
+  . "'"$ROOT_DIR"'/lib/rig/catalog.sh"
+  . "'"$ROOT_DIR"'/lib/rig/plan.sh"
+  rig_count_shell_edits_from_plan_file "'"$id_prefixed_shell_plan"'"
+' >"$out" 2>&1
+assert_success "$?" "shell edit count reads id-prefixed install-plan rows"
+assert_contains "$out" "1" "shell edit count does not skip id-prefixed rows as headers"
 
 invalid_mas_catalog="$TEST_TMP/invalid-mas-tools.tsv"
 {

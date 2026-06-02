@@ -27,12 +27,12 @@ runs diagnostics, and renders side-effect-free dry-run plans.
 - **Source of truth:** [`docs/rig-v1-spec.md`](docs/rig-v1-spec.md). Read it
   before any change. If a change conflicts with the spec, either align with the
   spec or update the spec in the same change — never let them drift.
-- **Runtime (planned):** `#!/bin/bash`, **Bash 3.2-compatible**, runs on a clean
+- **Runtime:** `#!/bin/bash`, **Bash 3.2-compatible**, runs on a clean
   Mac with zero installs. `gum` is an optional UI enhancement with a plain-Bash
   fallback.
 - **Install engine:** Homebrew + Homebrew Bundle. Version managers (`nvm`,
   `tenv`, Bun installer) only when Homebrew cannot give the required version.
-- **State (planned):** committable `Brewfile`, external install plan, and
+- **State:** committable `Brewfile`, external install plan, and
   `macos-defaults.sh` under `~/.config/rig/`. Catalog is a **TSV** (no `jq`/`yq`).
 - **No JavaScript/Node toolchain.** Do not add `package.json`, `bun`, or `npm`
   build steps; they do not apply to this project.
