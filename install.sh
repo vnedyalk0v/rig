@@ -43,10 +43,27 @@ validate_repo_url() {
 }
 
 require_macos() {
-  if [ "$(uname -s 2>/dev/null)" != "Darwin" ]; then
-    error "rig supports macOS only; detected $(uname -s 2>/dev/null)"
+  local os_name
+  os_name=$(uname -s 2>/dev/null)
+  if [ "$os_name" != "Darwin" ]; then
+    error "rig supports macOS only; detected $os_name"
     exit 1
   fi
+}
+
+check_rig_link_available() {
+  local existing_target
+  if [ -L "$rig_link" ]; then
+    existing_target=$(readlink "$rig_link")
+    if [ "$existing_target" != "$rig_target" ]; then
+      error "$rig_link already points to $existing_target; refusing to overwrite it"
+      return 1
+    fi
+  elif [ -e "$rig_link" ]; then
+    error "$rig_link already exists and is not a symlink; refusing to overwrite it"
+    return 1
+  fi
+  return 0
 }
 
 while [ "$#" -gt 0 ]; do
@@ -103,6 +120,8 @@ bin_dir=${HOME}/.local/bin
 rig_link=${bin_dir}/rig
 rig_target=${install_root}/rig
 
+require_macos
+
 if [ "$dry_run" = "yes" ]; then
   printf 'rig bootstrap dry-run\n'
   printf 'Dry run: no files will be created or changed\n'
@@ -114,7 +133,7 @@ if [ "$dry_run" = "yes" ]; then
   exit 0
 fi
 
-require_macos
+check_rig_link_available || exit 1
 
 if ! command -v git >/dev/null 2>&1; then
   error "git is required to clone or update rig"
@@ -138,16 +157,8 @@ else
   git clone --branch "$branch" -- "$repo_url" "$install_root" || exit 1
 fi
 
-if [ -L "$rig_link" ]; then
-  existing_target=$(readlink "$rig_link")
-  if [ "$existing_target" != "$rig_target" ]; then
-    error "$rig_link already points to $existing_target; refusing to overwrite it"
-    exit 1
-  fi
-elif [ -e "$rig_link" ]; then
-  error "$rig_link already exists and is not a symlink; refusing to overwrite it"
-  exit 1
-else
+check_rig_link_available || exit 1
+if [ ! -L "$rig_link" ] && [ ! -e "$rig_link" ]; then
   ln -s "$rig_target" "$rig_link" || exit 1
 fi
 
