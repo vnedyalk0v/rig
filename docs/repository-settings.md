@@ -19,7 +19,9 @@ rationale for a public open-source repository.
 - Wiki: disabled.
 - Discussions: disabled.
 - Pages: disabled.
-- Merge methods: squash only (merge commits and rebase merges disabled).
+- Merge methods: squash and merge commit enabled, rebase disabled. Feature
+  pull requests squash into `dev`; `dev <-> main` promotions and back-merges use
+  merge commits to preserve a shared ancestor.
 - Auto-merge: disabled.
 - Delete branch on merge: enabled.
 - Actions: enabled with all actions allowed.
@@ -39,7 +41,9 @@ rationale for a public open-source repository.
 
 Work flows `feature/* -> dev -> main`. Feature branches target `dev`; the
 maintainer promotes `dev` to `main`. Emergency `hotfix/*` branches may target
-`main` directly, after which `main` is synced back into `dev`.
+`main` directly, after which the `sync-main-to-dev` workflow
+(`.github/workflows/sync-main-to-dev.yml`) opens a `main -> dev` back-merge
+pull request so `dev` regains the fix.
 
 GitHub rulesets cannot restrict the source branch of a pull request, so the
 "only `dev` (or `hotfix/*`) may target `main`" rule is enforced by the
@@ -90,14 +94,16 @@ unmaintained wiki or unused project board.
 
 ### Merge Policy
 
-- Squash merge enabled.
-- Merge commits disabled.
+- Squash merge enabled (used for feature -> `dev` pull requests).
+- Merge commit enabled (used for `dev` <-> `main` promotions and back-merges).
 - Rebase merge disabled.
 - Auto-merge disabled.
 - Pull requests required for `main` and `dev`.
 
-Rationale: squash-only merges keep public history readable and match the
-rulesets' allowed merge method.
+Rationale: feature pull requests squash into `dev` for a readable history, while
+`dev` and `main` are promoted with merge commits so the two long-lived branches
+keep a shared ancestor. Squash-promoting between long-lived branches produces
+phantom add/add conflicts, so promotions and back-merges must use merge commits.
 
 ### Security And Analysis
 
@@ -118,8 +124,12 @@ so security reporting and dependency visibility should be enabled early.
 - Prefer GitHub-owned or verified actions.
 - The `verify-base` workflow is a required status check on `main` (added after
   it ran once on a `dev` -> `main` pull request).
+- The `sync-main-to-dev` workflow opens a `main -> dev` back-merge pull request
+  when the branches diverge (for example after a hotfix); it needs
+  `pull-requests: write`.
 - Pin third-party actions by SHA when workflows grow beyond simple trusted
-  actions. The current `pr-base-guard.yml` workflow uses no third-party actions.
+  actions. Both current workflows use only the GitHub CLI and no third-party
+  actions.
 
 Rationale: required checks are useful only after workflows exist; enabling them
 too early can block all merges.
