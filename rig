@@ -49,6 +49,8 @@ rig_install_command() {
     return "$?"
   fi
 
+  rig_require_macos || return 1
+
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --select|--defaults|--category)
@@ -88,6 +90,7 @@ rig_self_update() {
     esac
   fi
 
+  rig_require_macos || return 1
   if [ ! -d "$RIG_ROOT/.git" ]; then
     rig_print_error "self-update requires a git clone; current rig root is $RIG_ROOT"
     return 1

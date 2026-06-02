@@ -41,7 +41,9 @@ rig_doctor() {
   if rig_profile_path >/dev/null 2>&1; then
     printf 'ok: supported login shell profile target: %s\n' "$(rig_profile_path)"
   else
-    login_shell=${RIG_LOGIN_SHELL:-${SHELL:-unknown}}
+    if ! login_shell=$(rig_login_shell); then
+      login_shell=unknown
+    fi
     printf 'warning: unsupported login shell: %s\n' "$(basename "$login_shell")"
   fi
 

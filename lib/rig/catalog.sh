@@ -71,10 +71,17 @@ rig_validate_default_flag() {
 }
 
 rig_record_field() {
-  local record index
+  local record index field_index
+  local -a fields
   record=$1
   index=$2
-  printf '%s' "$record" | cut -d "$RIG_TSV_DELIMITER" -f "$index"
+  IFS="$RIG_TSV_DELIMITER" read -r -a fields <<EOF
+$record
+EOF
+  field_index=$((index - 1))
+  if [ "$field_index" -ge 0 ]; then
+    printf '%s' "${fields[$field_index]}"
+  fi
 }
 
 rig_validate_catalog() {
@@ -173,6 +180,20 @@ EOF
   if [ "$package" = "" ]; then
     rig_print_error "$catalog_path:$line_no: package is required"
     return 1
+  fi
+  if [ "$kind" = "tap-formula" ]; then
+    case "$package" in
+      */*)
+        if [ "${package%/*}" = "" ] || [ "${package##*/}" = "" ]; then
+          rig_print_error "$catalog_path:$line_no: invalid tap-formula package: $package"
+          return 1
+        fi
+        ;;
+      *)
+        rig_print_error "$catalog_path:$line_no: invalid tap-formula package: $package"
+        return 1
+        ;;
+    esac
   fi
   if [ "$kind" = "mas" ]; then
     case "$package" in
@@ -282,6 +303,25 @@ EOF
 
 rig_lookup_tool() {
   rig_lookup_record rig_each_tool "$1" 2
+}
+
+rig_tool_category_exists() {
+  local wanted record category _id _label _kind _package _default_flag _description _version_strategy _versions _notes
+  wanted=$1
+  while IFS= read -r record || [ "$record" != "" ]; do
+    if [ "$record" = "" ]; then
+      continue
+    fi
+    IFS="$RIG_TSV_DELIMITER" read -r category _id _label _kind _package _default_flag _description _version_strategy _versions _notes <<EOF
+$record
+EOF
+    if [ "$category" = "$wanted" ]; then
+      return 0
+    fi
+  done <<EOF
+$(rig_each_tool)
+EOF
+  return 1
 }
 
 rig_lookup_default() {

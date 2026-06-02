@@ -18,6 +18,16 @@ rig_is_macos() {
   [ "$(uname -s 2>/dev/null)" = "Darwin" ]
 }
 
+rig_require_macos() {
+  local os_name
+  os_name=$(uname -s 2>/dev/null)
+  if [ "$os_name" != "Darwin" ]; then
+    rig_print_error "rig supports macOS only; detected $os_name"
+    return 1
+  fi
+  return 0
+}
+
 rig_usage() {
   cat <<'EOF'
 Usage:

@@ -1,9 +1,10 @@
 #!/bin/bash
 
 rig_print_list() {
-  local category_filter
+  local category_filter category_seen
   local category id label kind package default_flag description version_strategy _versions _notes
   category_filter=
+  category_seen=no
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -12,6 +13,11 @@ rig_print_list() {
           rig_print_error "--category requires a value"
           return 1
         fi
+        if [ "$category_seen" = "yes" ]; then
+          rig_print_error "repeated --category is not supported"
+          return 1
+        fi
+        category_seen=yes
         category_filter=$2
         shift 2
         ;;
@@ -27,6 +33,10 @@ rig_print_list() {
   done
 
   rig_validate_catalogs || return 1
+  if [ "$category_filter" != "" ] && ! rig_tool_category_exists "$category_filter"; then
+    rig_print_error "unknown category: $category_filter"
+    return 1
+  fi
 
   printf 'category\tid\tlabel\tkind\tpackage\tdefault\tversion_strategy\tdescription\n'
   while IFS="$RIG_TSV_DELIMITER" read -r category id label kind package default_flag description version_strategy _versions _notes; do
@@ -181,6 +191,7 @@ rig_render_brewfile_line() {
 
 rig_render_dry_run() {
   local select_arg defaults_arg category_filter selected_tools selected_defaults
+  local select_seen defaults_seen category_seen
   local brewfile_count external_count shell_edit_count defaults_count
   local selected_id selected_default row profile_path selected_version login_shell
   local _category _id id label kind package _default_flag _description
@@ -189,6 +200,9 @@ rig_render_dry_run() {
   select_arg=
   defaults_arg=
   category_filter=
+  select_seen=no
+  defaults_seen=no
+  category_seen=no
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -200,6 +214,11 @@ rig_render_dry_run() {
           rig_print_error "--select requires a value"
           return 1
         fi
+        if [ "$select_seen" = "yes" ]; then
+          rig_print_error "repeated --select is not supported"
+          return 1
+        fi
+        select_seen=yes
         select_arg=$2
         shift 2
         ;;
@@ -208,6 +227,11 @@ rig_render_dry_run() {
           rig_print_error "--defaults requires a value"
           return 1
         fi
+        if [ "$defaults_seen" = "yes" ]; then
+          rig_print_error "repeated --defaults is not supported"
+          return 1
+        fi
+        defaults_seen=yes
         defaults_arg=$2
         shift 2
         ;;
@@ -216,6 +240,11 @@ rig_render_dry_run() {
           rig_print_error "--category requires a value"
           return 1
         fi
+        if [ "$category_seen" = "yes" ]; then
+          rig_print_error "repeated --category is not supported"
+          return 1
+        fi
+        category_seen=yes
         category_filter=$2
         shift 2
         ;;
@@ -230,7 +259,12 @@ rig_render_dry_run() {
     esac
   done
 
+  rig_require_macos || return 1
   rig_validate_catalogs || return 1
+  if [ "$category_filter" != "" ] && ! rig_tool_category_exists "$category_filter"; then
+    rig_print_error "unknown category: $category_filter"
+    return 1
+  fi
 
   if ! selected_tools=$(rig_collect_selected_tools "$select_arg" "$category_filter"); then
     return 1

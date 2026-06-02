@@ -30,11 +30,11 @@ jobs:
             echo "dev already matches main (identical tree); nothing to sync."
             exit 0
           fi
-          existing=$(gh pr list --base dev --head main --state open --json number --jq 'length')
+          existing=$(gh pr list --repo "$REPO" --base dev --head main --state open --json number --jq 'length')
           if [ "$existing" != "0" ]; then
             echo "An open main -> dev sync pull request already exists; it updates automatically."
             exit 0
           fi
-          gh pr create --base dev --head main \
+          gh pr create --repo "$REPO" --base dev --head main \
             --title "chore: sync main into dev" \
             --body "Automated back-merge so \`dev\` includes changes that landed directly on \`main\` (for example a hotfix). Review and **merge-commit** this pull request (do not squash) so \`dev\` and \`main\` keep a shared ancestor."
