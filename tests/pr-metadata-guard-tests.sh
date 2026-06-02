@@ -30,13 +30,15 @@ run_case() {
   head_ref=$4
   title=$5
   expected_text=$6
+  head_repo=${7:-vnedyalk0v/rig}
+  base_repo=${8:-vnedyalk0v/rig}
   output_file="$TEST_TMP/$name.out"
 
   BASE_REF=$base_ref \
     HEAD_REF=$head_ref \
     PR_TITLE=$title \
-    HEAD_REPO=vnedyalk0v/rig \
-    BASE_REPO=vnedyalk0v/rig \
+    HEAD_REPO=$head_repo \
+    BASE_REPO=$base_repo \
     "$ROOT_DIR/scripts/validate-pr-metadata.sh" >"$output_file" 2>&1
   status=$?
 
@@ -88,6 +90,16 @@ run_case \
   main \
   "chore: sync main into dev" \
   "PR metadata policy passed"
+
+run_case \
+  invalid_fork_main_to_dev_sync \
+  fail \
+  dev \
+  main \
+  "chore: sync main into dev" \
+  "main -> dev sync pull requests must originate from this repository" \
+  someone/rig \
+  vnedyalk0v/rig
 
 run_case \
   valid_dev_to_main_promotion \
