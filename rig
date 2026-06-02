@@ -52,6 +52,24 @@ rig_install_command() {
 }
 
 rig_self_update() {
+  if [ "$#" -gt 0 ]; then
+    case "$1" in
+      --help|-h)
+        if [ "$#" -gt 1 ]; then
+          rig_print_error "unknown self-update argument: $2"
+          return 1
+        fi
+        printf 'Usage: rig self-update\n'
+        printf 'Updates the local rig git clone with a fast-forward-only pull.\n'
+        return 0
+        ;;
+      *)
+        rig_print_error "unknown self-update argument: $1"
+        return 1
+        ;;
+    esac
+  fi
+
   if [ ! -d "$RIG_ROOT/.git" ]; then
     rig_print_error "self-update requires a git clone; current rig root is $RIG_ROOT"
     return 1
