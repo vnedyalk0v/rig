@@ -68,7 +68,7 @@ rig version
 ## Documentation
 
 - [v1 specification](docs/rig-v1-spec.md)
-- [Repository settings recommendations](docs/repository-settings.md)
+- [Repository settings record](docs/repository-settings.md)
 - [Contributing guide](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)
 - [Support guide](SUPPORT.md)
