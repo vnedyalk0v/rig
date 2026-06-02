@@ -71,10 +71,17 @@ rig_validate_default_flag() {
 }
 
 rig_record_field() {
-  local record index
+  local record index field_index
+  local -a fields
   record=$1
   index=$2
-  printf '%s' "$record" | cut -d "$RIG_TSV_DELIMITER" -f "$index"
+  IFS="$RIG_TSV_DELIMITER" read -r -a fields <<EOF
+$record
+EOF
+  field_index=$((index - 1))
+  if [ "$field_index" -ge 0 ]; then
+    printf '%s' "${fields[$field_index]}"
+  fi
 }
 
 rig_validate_catalog() {

@@ -89,11 +89,25 @@ fake_linux_bin="$TEST_TMP/fake-linux-bin"
 mkdir -p "$fake_darwin_bin" "$fake_linux_bin"
 cat >"$fake_darwin_bin/uname" <<'EOF'
 #!/bin/bash
-printf 'Darwin\n'
+case "$1" in
+  ""|-s)
+    printf 'Darwin\n'
+    ;;
+  *)
+    /usr/bin/uname "$@"
+    ;;
+esac
 EOF
 cat >"$fake_linux_bin/uname" <<'EOF'
 #!/bin/bash
-printf 'Linux\n'
+case "$1" in
+  ""|-s)
+    printf 'Linux\n'
+    ;;
+  *)
+    /usr/bin/uname "$@"
+    ;;
+esac
 EOF
 chmod +x "$fake_darwin_bin/uname" "$fake_linux_bin/uname"
 
