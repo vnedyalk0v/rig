@@ -20,7 +20,9 @@ None.
   deferred until real install strategy work starts.
 - Missing interactive prompts, `gum`, config replay, generated `Brewfile`,
   external install plan files, and generated `macos-defaults.sh` are deferred by
-  the documented MVP status.
+  the documented MVP status. Interactive install and config generation are now
+  implemented; remaining deferred items are broader catalog coverage and
+  additional external installer patterns.
 - Rejection of whitespace inside `--select 'vscode, chrome'` is not treated as a
   current defect because the CLI documents comma-separated IDs, and the
   interactive plain-Bash space/comma input path is not implemented yet.

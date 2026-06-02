@@ -24,70 +24,38 @@ RIG_ROOT=$(resolve_rig_root "$0")
 
 . "$RIG_ROOT/lib/rig/common.sh"
 . "$RIG_ROOT/lib/rig/catalog.sh"
+. "$RIG_ROOT/lib/rig/config.sh"
+. "$RIG_ROOT/lib/rig/shell.sh"
+. "$RIG_ROOT/lib/rig/brew.sh"
+. "$RIG_ROOT/lib/rig/apply.sh"
 . "$RIG_ROOT/lib/rig/plan.sh"
+. "$RIG_ROOT/lib/rig/prompts.sh"
 . "$RIG_ROOT/lib/rig/doctor.sh"
 
 rig_install_command() {
-  local arg dry_run
-  dry_run=no
-
-  for arg in "$@"; do
-    case "$arg" in
-      --help|-h)
-        printf 'Usage: rig install [--dry-run] [--select <ids>] [--defaults <ids>] [--category <id>]\n'
-        printf 'Real package installs are deferred in this MVP. Use --dry-run to preview.\n'
-        return 0
-        ;;
-      --dry-run)
-        dry_run=yes
-        ;;
-    esac
-  done
-
-  if [ "$dry_run" = "yes" ]; then
-    rig_render_dry_run "$@"
-    return "$?"
+  if [ "$#" -eq 0 ]; then
+    rig_require_macos || return 1
+    rig_validate_catalogs || return 1
+    rig_run_interactive_selection || return 1
+    rig_write_plan_config || return 1
+    rig_finish_install_apply || return 1
+    return 0
   fi
 
-  rig_require_macos || return 1
+  if ! rig_args_include --dry-run "$@"; then
+    rig_require_macos || return 1
+  fi
 
-  while [ "$#" -gt 0 ]; do
-    case "$1" in
-      --select|--defaults|--category)
-        if [ "$#" -lt 2 ]; then
-          rig_print_error "$1 requires a value"
-          return 1
-        fi
-        shift 2
-        ;;
-      *)
-        rig_print_error "unknown install argument: $1"
-        return 1
-        ;;
-    esac
-  done
-
-  rig_print_error "real installs are deferred in this MVP; run 'rig install --dry-run' to preview the plan"
-  return 1
+  rig_run_install "$@"
 }
 
 rig_self_update() {
+  rig_handle_command_help self-update \
+    'Usage: rig self-update' \
+    'Updates the local rig git clone with a fast-forward-only pull.' \
+    "$@" || return $?
   if [ "$#" -gt 0 ]; then
-    case "$1" in
-      --help|-h)
-        if [ "$#" -gt 1 ]; then
-          rig_print_error "unknown self-update argument: $2"
-          return 1
-        fi
-        printf 'Usage: rig self-update\n'
-        printf 'Updates the local rig git clone with a fast-forward-only pull.\n'
-        return 0
-        ;;
-      *)
-        rig_print_error "unknown self-update argument: $1"
-        return 1
-        ;;
-    esac
+    return 0
   fi
 
   rig_require_macos || return 1
@@ -105,6 +73,17 @@ rig_self_update() {
     git fetch origin || exit 1
     git pull --ff-only || exit 1
   )
+}
+
+rig_update_tools_command() {
+  rig_handle_command_help update-tools \
+    'Usage: rig update-tools' \
+    'Updates installed workstation packages through Homebrew.' \
+    "$@" || return $?
+  if [ "$#" -gt 0 ]; then
+    return 0
+  fi
+  rig_update_tools
 }
 
 rig_main() {
@@ -133,6 +112,9 @@ rig_main() {
       ;;
     self-update)
       rig_self_update "$@"
+      ;;
+    update-tools)
+      rig_update_tools_command "$@"
       ;;
     version|--version)
       printf 'rig %s\n' "$RIG_VERSION"

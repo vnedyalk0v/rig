@@ -35,7 +35,7 @@ rig_doctor() {
   if rig_command_exists brew; then
     printf 'ok: Homebrew found at %s\n' "$(command -v brew)"
   else
-    printf 'warning: Homebrew not found; real package installs are not implemented in this MVP\n'
+    printf 'warning: Homebrew not found; rig install will attempt to install it\n'
   fi
 
   if rig_profile_path >/dev/null 2>&1; then
