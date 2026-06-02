@@ -70,12 +70,25 @@ rig_validate_default_flag() {
   return 1
 }
 
-rig_validate_tools_catalog() {
+rig_record_field() {
+  local record index
+  record=$1
+  index=$2
+  printf '%s' "$record" | cut -d "$RIG_TSV_DELIMITER" -f "$index"
+}
+
+rig_validate_catalog() {
+  local catalog_path noun expected_header expected_fields id_field row_validator
+  local line_no seen_ids row_count line field_count record id
   catalog_path=$1
-  expected_header='category	id	label	kind	package	default	description	version_strategy	versions	notes'
+  noun=$2
+  expected_header=$3
+  expected_fields=$4
+  id_field=$5
+  row_validator=$6
 
   if [ ! -f "$catalog_path" ]; then
-    rig_print_error "tools catalog not found: $catalog_path"
+    rig_print_error "$noun catalog not found: $catalog_path"
     return 1
   fi
 
@@ -84,11 +97,13 @@ rig_validate_tools_catalog() {
 '
   row_count=0
 
+  # row_validator only reads its $record argument (a heredoc), never the catalog file.
+  # shellcheck disable=SC2094
   while IFS= read -r line || [ "$line" != "" ]; do
     line_no=$((line_no + 1))
     if [ "$line_no" -eq 1 ]; then
       if [ "$line" != "$expected_header" ]; then
-        rig_print_error "$catalog_path:1: invalid tools catalog header"
+        rig_print_error "$catalog_path:1: invalid $noun catalog header"
         return 1
       fi
       continue
@@ -99,20 +114,13 @@ rig_validate_tools_catalog() {
     fi
 
     field_count=$(rig_field_count "$line")
-    if [ "$field_count" != "10" ]; then
-      rig_print_error "$catalog_path:$line_no: expected 10 tab-separated fields, got $field_count"
+    if [ "$field_count" != "$expected_fields" ]; then
+      rig_print_error "$catalog_path:$line_no: expected $expected_fields tab-separated fields, got $field_count"
       return 1
     fi
 
     record=$(rig_tsv_to_record "$line")
-    IFS="$RIG_TSV_DELIMITER" read -r category id label kind package default_flag description version_strategy _versions _notes <<EOF
-$record
-EOF
-
-    if ! rig_validate_id "$category"; then
-      rig_print_error "$catalog_path:$line_no: invalid category: $category"
-      return 1
-    fi
+    id=$(rig_record_field "$record" "$id_field")
     if ! rig_validate_id "$id"; then
       rig_print_error "$catalog_path:$line_no: invalid id: $id"
       return 1
@@ -127,30 +135,8 @@ $id
     esac
     seen_ids="${seen_ids}${id}
 "
-    if [ "$label" = "" ]; then
-      rig_print_error "$catalog_path:$line_no: label is required"
-      return 1
-    fi
-    if ! rig_validate_tool_kind "$kind"; then
-      rig_print_error "$catalog_path:$line_no: invalid kind: $kind"
-      return 1
-    fi
-    if [ "$package" = "" ]; then
-      rig_print_error "$catalog_path:$line_no: package is required"
-      return 1
-    fi
-    if ! rig_validate_default_flag "$default_flag"; then
-      rig_print_error "$catalog_path:$line_no: invalid default flag: $default_flag"
-      return 1
-    fi
-    if [ "$description" = "" ]; then
-      rig_print_error "$catalog_path:$line_no: description is required"
-      return 1
-    fi
-    if ! rig_validate_version_strategy "$version_strategy"; then
-      rig_print_error "$catalog_path:$line_no: invalid version strategy: $version_strategy"
-      return 1
-    fi
+
+    "$row_validator" "$catalog_path" "$line_no" "$record" || return 1
     row_count=$((row_count + 1))
   done <"$catalog_path"
 
@@ -162,80 +148,90 @@ $id
   return 0
 }
 
-rig_validate_defaults_catalog() {
+rig_validate_tools_row() {
+  local catalog_path line_no record
+  local category id label kind package default_flag description version_strategy _versions _notes
   catalog_path=$1
-  expected_header='id	label	description	command	restart_hint'
-
-  if [ ! -f "$catalog_path" ]; then
-    rig_print_error "macOS defaults catalog not found: $catalog_path"
-    return 1
-  fi
-
-  line_no=0
-  seen_ids='
-'
-  row_count=0
-
-  while IFS= read -r line || [ "$line" != "" ]; do
-    line_no=$((line_no + 1))
-    if [ "$line_no" -eq 1 ]; then
-      if [ "$line" != "$expected_header" ]; then
-        rig_print_error "$catalog_path:1: invalid macOS defaults catalog header"
-        return 1
-      fi
-      continue
-    fi
-
-    if [ "$line" = "" ]; then
-      continue
-    fi
-
-    field_count=$(rig_field_count "$line")
-    if [ "$field_count" != "5" ]; then
-      rig_print_error "$catalog_path:$line_no: expected 5 tab-separated fields, got $field_count"
-      return 1
-    fi
-
-    record=$(rig_tsv_to_record "$line")
-    IFS="$RIG_TSV_DELIMITER" read -r id label description command_text _restart_hint <<EOF
+  line_no=$2
+  record=$3
+  IFS="$RIG_TSV_DELIMITER" read -r category id label kind package default_flag description version_strategy _versions _notes <<EOF
 $record
 EOF
 
-    if ! rig_validate_id "$id"; then
-      rig_print_error "$catalog_path:$line_no: invalid id: $id"
-      return 1
-    fi
-    case "$seen_ids" in
-      *"
-$id
-"*)
-        rig_print_error "$catalog_path:$line_no: duplicate id: $id"
+  if ! rig_validate_id "$category"; then
+    rig_print_error "$catalog_path:$line_no: invalid category: $category"
+    return 1
+  fi
+  if [ "$label" = "" ]; then
+    rig_print_error "$catalog_path:$line_no: label is required"
+    return 1
+  fi
+  if ! rig_validate_tool_kind "$kind"; then
+    rig_print_error "$catalog_path:$line_no: invalid kind: $kind"
+    return 1
+  fi
+  if [ "$package" = "" ]; then
+    rig_print_error "$catalog_path:$line_no: package is required"
+    return 1
+  fi
+  if [ "$kind" = "mas" ]; then
+    case "$package" in
+      ""|*[!0-9]*)
+        rig_print_error "$catalog_path:$line_no: invalid mas id: $package"
         return 1
         ;;
     esac
-    seen_ids="${seen_ids}${id}
-"
-    if [ "$label" = "" ]; then
-      rig_print_error "$catalog_path:$line_no: label is required"
-      return 1
-    fi
-    if [ "$description" = "" ]; then
-      rig_print_error "$catalog_path:$line_no: description is required"
-      return 1
-    fi
-    if [ "$command_text" = "" ]; then
-      rig_print_error "$catalog_path:$line_no: command is required"
-      return 1
-    fi
-    row_count=$((row_count + 1))
-  done <"$catalog_path"
-
-  if [ "$row_count" -eq 0 ]; then
-    rig_print_error "$catalog_path: catalog must contain at least one item"
+  fi
+  if ! rig_validate_default_flag "$default_flag"; then
+    rig_print_error "$catalog_path:$line_no: invalid default flag: $default_flag"
     return 1
   fi
-
+  if [ "$description" = "" ]; then
+    rig_print_error "$catalog_path:$line_no: description is required"
+    return 1
+  fi
+  if ! rig_validate_version_strategy "$version_strategy"; then
+    rig_print_error "$catalog_path:$line_no: invalid version strategy: $version_strategy"
+    return 1
+  fi
   return 0
+}
+
+rig_validate_defaults_row() {
+  local catalog_path line_no record
+  local id label description command_text _restart_hint
+  catalog_path=$1
+  line_no=$2
+  record=$3
+  IFS="$RIG_TSV_DELIMITER" read -r id label description command_text _restart_hint <<EOF
+$record
+EOF
+
+  if [ "$label" = "" ]; then
+    rig_print_error "$catalog_path:$line_no: label is required"
+    return 1
+  fi
+  if [ "$description" = "" ]; then
+    rig_print_error "$catalog_path:$line_no: description is required"
+    return 1
+  fi
+  if [ "$command_text" = "" ]; then
+    rig_print_error "$catalog_path:$line_no: command is required"
+    return 1
+  fi
+  return 0
+}
+
+rig_validate_tools_catalog() {
+  rig_validate_catalog "$1" "tools" \
+    'category	id	label	kind	package	default	description	version_strategy	versions	notes' \
+    10 2 rig_validate_tools_row
+}
+
+rig_validate_defaults_catalog() {
+  rig_validate_catalog "$1" "macOS defaults" \
+    'id	label	description	command	restart_hint' \
+    5 1 rig_validate_defaults_row
 }
 
 rig_validate_catalogs() {
@@ -244,8 +240,9 @@ rig_validate_catalogs() {
   return 0
 }
 
-rig_each_tool() {
-  catalog_path=$(rig_tools_catalog_path)
+rig_each_record() {
+  local catalog_path line_no line
+  catalog_path=$1
   line_no=0
   while IFS= read -r line || [ "$line" != "" ]; do
     line_no=$((line_no + 1))
@@ -254,72 +251,43 @@ rig_each_tool() {
     fi
     rig_tsv_to_record "$line"
   done <"$catalog_path"
+}
+
+rig_each_tool() {
+  rig_each_record "$(rig_tools_catalog_path)"
 }
 
 rig_each_default() {
-  catalog_path=$(rig_defaults_catalog_path)
-  line_no=0
-  while IFS= read -r line || [ "$line" != "" ]; do
-    line_no=$((line_no + 1))
-    if [ "$line_no" -eq 1 ] || [ "$line" = "" ]; then
+  rig_each_record "$(rig_defaults_catalog_path)"
+}
+
+rig_lookup_record() {
+  local producer wanted id_field record
+  producer=$1
+  wanted=$2
+  id_field=$3
+  while IFS= read -r record || [ "$record" != "" ]; do
+    if [ "$record" = "" ]; then
       continue
     fi
-    rig_tsv_to_record "$line"
-  done <"$catalog_path"
-}
-
-rig_tool_exists() {
-  wanted=$1
-  while IFS="$RIG_TSV_DELIMITER" read -r _category id _label _kind _package _default_flag _description _version_strategy _versions _notes; do
-    if [ "$id" = "$wanted" ]; then
+    if [ "$(rig_record_field "$record" "$id_field")" = "$wanted" ]; then
+      printf '%s\n' "$record"
       return 0
     fi
   done <<EOF
-$(rig_each_tool)
-EOF
-  return 1
-}
-
-rig_default_exists() {
-  wanted=$1
-  while IFS="$RIG_TSV_DELIMITER" read -r id _label _description _command_text _restart_hint; do
-    if [ "$id" = "$wanted" ]; then
-      return 0
-    fi
-  done <<EOF
-$(rig_each_default)
+$("$producer")
 EOF
   return 1
 }
 
 rig_lookup_tool() {
-  wanted=$1
-  while IFS= read -r record || [ "$record" != "" ]; do
-    IFS="$RIG_TSV_DELIMITER" read -r _category id _label _kind _package _default_flag _description _version_strategy _versions _notes <<EOF
-$record
-EOF
-    if [ "$id" = "$wanted" ]; then
-      printf '%s\n' "$record"
-      return 0
-    fi
-  done <<EOF
-$(rig_each_tool)
-EOF
-  return 1
+  rig_lookup_record rig_each_tool "$1" 2
 }
 
 rig_lookup_default() {
-  wanted=$1
-  while IFS= read -r record || [ "$record" != "" ]; do
-    IFS="$RIG_TSV_DELIMITER" read -r id _label _description _command_text _restart_hint <<EOF
-$record
-EOF
-    if [ "$id" = "$wanted" ]; then
-      printf '%s\n' "$record"
-      return 0
-    fi
-  done <<EOF
-$(rig_each_default)
-EOF
-  return 1
+  rig_lookup_record rig_each_default "$1" 1
+}
+
+rig_default_exists() {
+  rig_lookup_default "$1" >/dev/null 2>&1
 }

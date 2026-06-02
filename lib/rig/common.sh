@@ -36,24 +36,54 @@ Notes:
 EOF
 }
 
-rig_resolve_root() {
-  source_path=$1
-  while [ -L "$source_path" ]; do
-    source_dir=$(CDPATH='' cd -P -- "$(dirname -- "$source_path")" && pwd)
-    target_path=$(readlink "$source_path")
-    case "$target_path" in
-      /*) source_path=$target_path ;;
-      *) source_path=$source_dir/$target_path ;;
+rig_login_shell() {
+  local shell_path username
+  if [ "${RIG_LOGIN_SHELL:-}" != "" ]; then
+    printf '%s\n' "$RIG_LOGIN_SHELL"
+    return 0
+  fi
+  if rig_is_macos; then
+    username=$(id -un 2>/dev/null)
+    if [ "$username" != "" ] && rig_command_exists dscl; then
+      shell_path=$(dscl . -read "/Users/$username" UserShell 2>/dev/null | awk '{print $NF}')
+      if [ "$shell_path" != "" ]; then
+        printf '%s\n' "$shell_path"
+        return 0
+      fi
+    fi
+  fi
+  if [ "${SHELL:-}" != "" ]; then
+    printf '%s\n' "$SHELL"
+    return 0
+  fi
+  return 1
+}
+
+rig_escape_brew_string() {
+  local value char escaped
+  value=$1
+  escaped=
+  while [ "$value" != "" ]; do
+    char=${value%"${value#?}"}
+    value=${value#?}
+    case "$char" in
+      \\) escaped="${escaped}\\\\" ;;
+      \") escaped="${escaped}\\\"" ;;
+      *) escaped="${escaped}${char}" ;;
     esac
   done
-  CDPATH='' cd -P -- "$(dirname -- "$source_path")" && pwd
+  printf '%s' "$escaped"
 }
 
 rig_profile_path() {
+  local shell_path shell_name
   if [ "${HOME:-}" = "" ]; then
     return 1
   fi
-  shell_name=$(basename "${SHELL:-}")
+  if ! shell_path=$(rig_login_shell); then
+    return 1
+  fi
+  shell_name=$(basename "$shell_path")
   case "$shell_name" in
     zsh)
       printf '%s\n' "${HOME}/.zshrc"
@@ -68,6 +98,7 @@ rig_profile_path() {
 }
 
 rig_join_csv_as_lines() {
+  local value old_ifs glob_was_disabled item
   value=$1
   old_ifs=$IFS
   case "$-" in
