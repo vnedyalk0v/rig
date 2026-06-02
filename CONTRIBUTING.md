@@ -99,18 +99,23 @@ Before opening a pull request, confirm:
 
 ## Validation
 
-No implementation test suite exists yet. Once scripts are added, changes should
-include focused validation such as:
+There is no build system. Use the shell test harness and focused syntax checks:
 
 ```bash
-bash -n install.sh
-bash -n path/to/script.sh
+bash tests/run-tests.sh
+for f in install.sh rig lib/rig/*.sh scripts/validate-catalog.sh tests/run-tests.sh; do
+  bash -n "$f"
+done
 ./install.sh --dry-run
 ./rig dry-run
 ```
 
 Catalog changes should also be validated by a command or script that proves the
 TSV shape is parseable and every selectable item has a description.
+
+```bash
+./scripts/validate-catalog.sh
+```
 
 ## Issues
 

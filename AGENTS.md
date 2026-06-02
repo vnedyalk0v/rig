@@ -17,12 +17,13 @@ so safety is not optional. Prioritize in this order:
 ## Project Overview
 
 `rig` is a small macOS-only DevOps bootstrap tool ("rig up your Mac"). A
-one-command `install.sh` entrypoint verifies macOS, sets up Homebrew, and runs a
-category-based, multi-select installer with interactive, non-interactive, and
-dry-run modes.
+one-command `install.sh` entrypoint verifies macOS and installs/updates the
+local `rig` command. The current MVP validates the TSV catalog, lists tools,
+runs diagnostics, and renders side-effect-free dry-run plans.
 
-- **Status:** Pre-release. The spec is written; **no installer or `rig` command
-  exists yet.** This repo is currently documentation only.
+- **Status:** Pre-release MVP. The installer and `rig` command exist, but real
+  workstation package installs are intentionally deferred. `rig install`
+  without `--dry-run` exits with a deferred message.
 - **Source of truth:** [`docs/rig-v1-spec.md`](docs/rig-v1-spec.md). Read it
   before any change. If a change conflicts with the spec, either align with the
   spec or update the spec in the same change — never let them drift.
@@ -47,7 +48,14 @@ dry-run modes.
 - `.github/workflows/pr-base-guard.yml` — `verify-base` check (only `dev`/`hotfix/*` may target `main`).
 - `.github/workflows/sync-main-to-dev.yml` — opens a `main -> dev` back-merge PR after a hotfix.
 - `.coderabbit.yaml` — CodeRabbit review configuration.
-- *(Planned)* `install.sh`, `rig`, catalog `.tsv`, `macos-defaults.sh`.
+- `install.sh` — remote bootstrap foundation; dry-run must remain mutation-free.
+- `rig` — extensionless Bash 3.2-compatible CLI.
+- `lib/rig/` — shared Bash modules for catalog parsing, dry-run rendering, and
+  diagnostics.
+- `catalog/*.tsv` — tool and macOS defaults catalogs.
+- `scripts/validate-catalog.sh` — TSV validation.
+- `tests/run-tests.sh` — shell behavior tests.
+- *(Planned)* generated `macos-defaults.sh` under `~/.config/rig/`.
 
 ## Key Commands
 
@@ -55,18 +63,24 @@ There is no build system. Validate work with the lightest sufficient check.
 
 - **Docs changes:** verify internal links and cross-references resolve; keep
   claims consistent with `docs/rig-v1-spec.md`.
-- **Shell scripts (once they exist):**
+- **Shell scripts:**
 
 ```bash
-bash -n install.sh            # syntax check, no execution
-bash -n path/to/script.sh
+for f in install.sh rig lib/rig/*.sh scripts/validate-catalog.sh tests/run-tests.sh; do
+  bash -n "$f"                # syntax check, no execution
+done
 shellcheck install.sh         # if available
+bash tests/run-tests.sh
 ./install.sh --dry-run        # must make zero system/user changes
 ./rig dry-run
 ```
 
 - **Catalog (TSV):** prove it is parseable with built-in `while read` and that
   every selectable item has a non-empty `description` field.
+
+```bash
+./scripts/validate-catalog.sh
+```
 
 ## Code Style & Conventions
 

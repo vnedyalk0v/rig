@@ -1,0 +1,5 @@
+category	id	label	kind	package	default	description	version_strategy	versions	notes
+ide	vscode	Visual Studio Code	cask	visual-studio-code	yes	General-purpose code editor	homebrew-latest		Verified with brew info --cask visual-studio-code on 2026-06-02
+ai	codex-cli	Codex CLI	cask	codex	no	OpenAI command-line coding agent	homebrew-latest		Verified with brew info --cask codex on 2026-06-02
+browser	chrome	Google Chrome	cask	google-chrome	yes	Mainstream browser	homebrew-latest		Verified with brew info --cask google-chrome on 2026-06-02
+runtime	node-npm	Node.js/npm	external	nvm	no	Node.js runtime plus npm package manager	nvm	latest,lts	External version manager; real install deferred in MVP

@@ -8,11 +8,14 @@ engineers, and platform engineers. The v1 design is captured in
 
 ## Status
 
-This repository is in the v1 planning stage. The project spec is written, but
-the installer and `rig` command are not implemented yet.
+This repository is in pre-release MVP development. The project spec is written,
+and the first local `rig` command plus `install.sh` bootstrap foundation exist.
+The MVP can validate the catalog, list tools, run diagnostics, and render dry-run
+plans. It does **not** perform real workstation package installs yet.
 
 Do not run a remote installer for this repository until `install.sh` exists in
-`main` and you have reviewed it.
+`main` and you have reviewed it. Local dry-run testing from a clone is the safe
+path while v1 is being built.
 
 ## Planned v1 Shape
 
@@ -44,7 +47,21 @@ The planned dry-run bootstrap command is:
 Remote shell execution has real supply-chain risk. The installer should stay
 small and readable, and users should review `install.sh` before running it.
 
-## Planned Commands
+## Available MVP Commands
+
+```text
+rig install --dry-run
+rig dry-run
+rig list
+rig doctor
+rig self-update
+rig version
+```
+
+`rig install` without `--dry-run` intentionally exits with a deferred message in
+this MVP.
+
+## Planned v1 Commands
 
 ```text
 rig install
@@ -55,6 +72,18 @@ rig doctor
 rig self-update
 rig update-tools
 rig version
+```
+
+## Local Validation
+
+```bash
+bash tests/run-tests.sh
+for f in install.sh rig lib/rig/*.sh scripts/validate-catalog.sh tests/run-tests.sh; do
+  bash -n "$f"
+done
+./scripts/validate-catalog.sh
+./install.sh --dry-run
+./rig dry-run
 ```
 
 ## Design Principles

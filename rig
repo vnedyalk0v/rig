@@ -1,0 +1,107 @@
+#!/bin/bash
+
+set -u
+
+resolve_rig_root() {
+  source_path=$1
+  while [ -L "$source_path" ]; do
+    source_dir=$(CDPATH= cd -P -- "$(dirname -- "$source_path")" && pwd)
+    target_path=$(readlink "$source_path")
+    case "$target_path" in
+      /*)
+        source_path=$target_path
+        ;;
+      *)
+        source_path=$source_dir/$target_path
+        ;;
+    esac
+  done
+  CDPATH= cd -P -- "$(dirname -- "$source_path")" && pwd
+}
+
+RIG_ROOT=$(resolve_rig_root "$0")
+
+. "$RIG_ROOT/lib/rig/common.sh"
+. "$RIG_ROOT/lib/rig/catalog.sh"
+. "$RIG_ROOT/lib/rig/plan.sh"
+. "$RIG_ROOT/lib/rig/doctor.sh"
+
+rig_install_command() {
+  if [ "$#" -gt 0 ]; then
+    case "$1" in
+      --help|-h)
+        printf 'Usage: rig install [--dry-run] [--select <ids>] [--defaults <ids>] [--category <id>]\n'
+        printf 'Real package installs are deferred in this MVP. Use --dry-run to preview.\n'
+        return 0
+        ;;
+    esac
+  fi
+
+  for arg in "$@"; do
+    if [ "$arg" = "--dry-run" ]; then
+      rig_render_dry_run "$@"
+      return "$?"
+    fi
+  done
+
+  rig_print_error "real installs are deferred in this MVP; run 'rig install --dry-run' to preview the plan"
+  return 1
+}
+
+rig_self_update() {
+  if [ ! -d "$RIG_ROOT/.git" ]; then
+    rig_print_error "self-update requires a git clone; current rig root is $RIG_ROOT"
+    return 1
+  fi
+  if ! rig_command_exists git; then
+    rig_print_error "git is required for self-update"
+    return 1
+  fi
+
+  (
+    cd "$RIG_ROOT" || exit 1
+    git fetch origin || exit 1
+    git pull --ff-only || exit 1
+  )
+}
+
+rig_main() {
+  if [ "$#" -eq 0 ]; then
+    rig_usage
+    return 0
+  fi
+
+  command_name=$1
+  shift
+
+  case "$command_name" in
+    install)
+      rig_install_command "$@"
+      ;;
+    dry-run)
+      rig_render_dry_run "$@"
+      ;;
+    list)
+      rig_print_list "$@"
+      ;;
+    doctor)
+      rig_doctor "$@"
+      ;;
+    self-update)
+      rig_self_update "$@"
+      ;;
+    version|--version)
+      printf 'rig %s\n' "$RIG_VERSION"
+      ;;
+    help|--help|-h)
+      rig_usage
+      ;;
+    *)
+      rig_print_error "unknown command: $command_name"
+      rig_usage >&2
+      return 1
+      ;;
+  esac
+}
+
+rig_main "$@"
