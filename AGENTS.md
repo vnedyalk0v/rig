@@ -45,7 +45,8 @@ runs diagnostics, and renders side-effect-free dry-run plans.
 - `CONTRIBUTING.md` — contribution rules and validation commands.
 - `SECURITY.md` — installer/supply-chain security expectations.
 - `.github/ISSUE_TEMPLATE/`, `.github/pull_request_template.md` — issue/PR formats.
-- `.github/workflows/pr-base-guard.yml` — `verify-base` check (only `dev`/`hotfix/*` may target `main`).
+- `.github/workflows/pr-base-guard.yml` — `verify-base` check (only
+  `dev`/`hotfix/*` may target `main`).
 - `.github/workflows/sync-main-to-dev.yml` — opens a `main -> dev` back-merge PR after a hotfix.
 - `.coderabbit.yaml` — CodeRabbit review configuration.
 - `install.sh` — remote bootstrap foundation; dry-run must remain mutation-free.
@@ -106,13 +107,49 @@ git diff --check
   associative arrays (`declare -A`), `mapfile`/`readarray`, case-modification
   expansions (`${var^^}`, `${var,,}`), namerefs (`local -n`), or `;&`/`;;&`
   case fall-through. These are Bash 4+ and absent on macOS `/bin/bash` (3.2.57).
+- Declare function-scoped variables with `local` before first use. Bash 3.2
+  supports `local`; avoid leaking helper variables into the global namespace.
 - Always quote variable expansions; treat all user/catalog input as untrusted.
+- When intentional word splitting is required for untrusted input, explicitly
+  control shell state. Disable pathname expansion with `set -f`, preserve/restore
+  the previous globbing state and `IFS`, and add a regression test for glob
+  characters such as `*`, `?`, and `[`.
 - Make shell-startup edits **idempotent** using managed marker blocks; detect the
   user's real login shell before editing `~/.zshrc` vs `~/.bash_profile`.
 - Keep `install.sh` small and readable — it is downloaded and run via `curl`.
 - Comments explain intent or non-obvious constraints only; do not narrate code.
+  Do not add boilerplate shell "docstrings" just to satisfy generic reviewer
+  coverage metrics.
 - Markdown: wrap prose at a sane width, use backticks for files/commands, keep
   the existing tone of the surrounding docs.
+
+## Reviewer-Learned Guardrails
+
+These are recurring pitfalls caught by AI reviewers. Treat them as pre-flight
+checks before opening or updating a PR.
+
+- **Workflow guards must run trusted code.** For `pull_request` workflows that
+  enforce branch, title, or publishing policy, do not check out and execute
+  scripts from the PR branch. Inline the validation from event metadata, or run
+  trusted code from the protected base ref.
+- **Third-party Actions must be hardened.** If a workflow uses an external
+  action, pin it to a full commit SHA. For `actions/checkout`, set
+  `persist-credentials: false` unless the job truly needs persisted credentials.
+- **Clone URLs are executable inputs.** Validate any user-provided repository URL
+  before `git clone`, `git fetch`, or dry-run display. Allow only reviewed
+  transports such as `https://...` or the intended GitHub SSH form; reject
+  `ext::`, `file://`, and other unexpected transports.
+- **macOS-only behavior still needs portable tests.** Tests that exercise
+  `uname -s` behavior must either stub the OS check or assert the expected
+  non-Darwin failure. Do not assume CI or reviewers run on macOS.
+- **Cleanup must survive failing assertions.** If a test changes permissions
+  such as making a temp HOME read-only, the `trap` cleanup must restore writable
+  permissions before `rm -rf`; do not rely only on in-test restoration after the
+  assertion.
+- **Review warnings are not automatically requirements.** Verify every external
+  reviewer finding against this repo, the spec, and these instructions. Fix true
+  issues, and reply with a short technical reason when a finding is a
+  false-positive or would add low-signal code.
 
 ## Boundaries
 
