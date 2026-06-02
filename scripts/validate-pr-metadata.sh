@@ -29,7 +29,12 @@ require_value PR_TITLE "$pr_title"
 case "$base_ref" in
   dev)
     case "$head_ref" in
-      feat/*|fix/*|bug/*|docs/*|chore/*|ci/*|refactor/*|main)
+      main)
+        if [ "$head_repo" != "" ] && [ "$base_repo" != "" ] && [ "$head_repo" != "$base_repo" ]; then
+          error "main -> dev sync pull requests must originate from this repository, not a fork."
+        fi
+        ;;
+      feat/*|fix/*|bug/*|docs/*|chore/*|ci/*|refactor/*)
         ;;
       *)
         error "Pull requests into 'dev' must use a feature branch prefix: feat/, fix/, bug/, docs/, chore/, ci/, or refactor/. The only non-feature exception is main -> dev sync."

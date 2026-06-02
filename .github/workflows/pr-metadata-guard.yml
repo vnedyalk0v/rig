@@ -33,7 +33,12 @@ jobs:
           case "$BASE_REF" in
             dev)
               case "$HEAD_REF" in
-                feat/*|fix/*|bug/*|docs/*|chore/*|ci/*|refactor/*|main)
+                main)
+                  if [ "$HEAD_REPO" != "$BASE_REPO" ]; then
+                    error "main -> dev sync pull requests must originate from this repository, not a fork."
+                  fi
+                  ;;
+                feat/*|fix/*|bug/*|docs/*|chore/*|ci/*|refactor/*)
                   ;;
                 *)
                   error "Pull requests into 'dev' must use a feature branch prefix: feat/, fix/, bug/, docs/, chore/, ci/, or refactor/. The only non-feature exception is main -> dev sync."
