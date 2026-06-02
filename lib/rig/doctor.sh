@@ -1,6 +1,7 @@
 #!/bin/bash
 
 rig_doctor() {
+  local failures home_path login_shell
   failures=0
 
   printf 'rig doctor\n'
@@ -40,7 +41,8 @@ rig_doctor() {
   if rig_profile_path >/dev/null 2>&1; then
     printf 'ok: supported login shell profile target: %s\n' "$(rig_profile_path)"
   else
-    printf 'warning: unsupported login shell: %s\n' "${SHELL:-unknown}"
+    login_shell=${RIG_LOGIN_SHELL:-${SHELL:-unknown}}
+    printf 'warning: unsupported login shell: %s\n' "$(basename "$login_shell")"
   fi
 
   if rig_validate_catalogs >/dev/null 2>&1; then

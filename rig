@@ -28,23 +28,41 @@ RIG_ROOT=$(resolve_rig_root "$0")
 . "$RIG_ROOT/lib/rig/doctor.sh"
 
 rig_install_command() {
-  local arg
+  local arg dry_run
+  dry_run=no
 
-  if [ "$#" -gt 0 ]; then
-    case "$1" in
+  for arg in "$@"; do
+    case "$arg" in
       --help|-h)
         printf 'Usage: rig install [--dry-run] [--select <ids>] [--defaults <ids>] [--category <id>]\n'
         printf 'Real package installs are deferred in this MVP. Use --dry-run to preview.\n'
         return 0
         ;;
+      --dry-run)
+        dry_run=yes
+        ;;
     esac
+  done
+
+  if [ "$dry_run" = "yes" ]; then
+    rig_render_dry_run "$@"
+    return "$?"
   fi
 
-  for arg in "$@"; do
-    if [ "$arg" = "--dry-run" ]; then
-      rig_render_dry_run "$@"
-      return "$?"
-    fi
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --select|--defaults|--category)
+        if [ "$#" -lt 2 ]; then
+          rig_print_error "$1 requires a value"
+          return 1
+        fi
+        shift 2
+        ;;
+      *)
+        rig_print_error "unknown install argument: $1"
+        return 1
+        ;;
+    esac
   done
 
   rig_print_error "real installs are deferred in this MVP; run 'rig install --dry-run' to preview the plan"
