@@ -73,11 +73,15 @@ rig version
 - [Security policy](SECURITY.md)
 - [Support guide](SUPPORT.md)
 - [Code of conduct](CODE_OF_CONDUCT.md)
+- [Agent instructions](AGENTS.md) — guidance for AI coding agents
 
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). While v1 is being built, small,
-spec-aligned pull requests are preferred.
+spec-aligned pull requests are preferred. Branch off `dev` and open pull
+requests against `dev` (the default branch); `main` is the stable release
+branch. [CodeRabbit](https://coderabbit.ai) automatically reviews every pull
+request.
 
 ## Security
 

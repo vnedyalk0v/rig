@@ -1,0 +1,38 @@
+name: PR base guard
+
+# Enforces the repository branch policy: pull requests into `main` are only
+# allowed from `dev` or from `hotfix/*` branches, and only from this repository
+# (a fork branch coincidentally named `dev` cannot satisfy the check).
+# Feature work targets `dev`; `dev` is promoted to `main` by the maintainer.
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  verify-base:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce dev-or-hotfix into main
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+        run: |
+          if [ "$HEAD_REPO" != "$BASE_REPO" ]; then
+            echo "::error::Pull requests into 'main' must originate from this repository, not a fork."
+            exit 1
+          fi
+          case "$HEAD_REF" in
+            dev | hotfix/*)
+              echo "OK: '$HEAD_REF' is allowed to target 'main'."
+              ;;
+            *)
+              echo "::error::Pull requests into 'main' are only allowed from 'dev' or 'hotfix/*'. Open this pull request against 'dev' instead."
+              exit 1
+              ;;
+          esac
