@@ -1,0 +1,118 @@
+# yaml-language-server: $schema=https://storage.googleapis.com/coderabbit_public_assets/schema.v2.json
+#
+# CodeRabbit configuration for rig (https://github.com/vnedyalk0v/rig).
+# rig is a public, auditable macOS bootstrap tool written as Bash 3.2-compatible
+# shell. Reviews emphasize shell safety, dry-run side-effect freeness, and
+# alignment with docs/rig-v1-spec.md (the source of truth).
+
+language: en-US
+tone_instructions: >-
+  Be concise and direct. Prioritize correctness, then user safety and
+  auditability, then idempotency, then simplicity. Focus on shell-injection
+  risk, unquoted expansions, Bash 3.2 compatibility, dry-run side effects, and
+  whether changes stay consistent with docs/rig-v1-spec.md.
+early_access: false
+enable_free_tier: true
+
+reviews:
+  profile: assertive
+  request_changes_workflow: true
+  high_level_summary: true
+  collapse_walkthrough: false
+  changed_files_summary: true
+  sequence_diagrams: true
+  estimate_code_review_effort: true
+  assess_linked_issues: true
+  related_issues: true
+  related_prs: true
+  suggested_labels: true
+  auto_apply_labels: false
+  suggested_reviewers: false
+  poem: false
+  in_progress_fortune: false
+
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    drafts: false
+    base_branches:
+      - main
+      - dev
+
+  path_instructions:
+    - path: "install.sh"
+      instructions: >-
+        Remote entrypoint downloaded and executed via curl | bash. Keep it small
+        and readable. Require: macOS guard (exit unless `uname -s` is Darwin),
+        Bash 3.2 compatibility, safe quoting of every expansion, argument parsing
+        (including --dry-run) before any install/clone step, and that --dry-run
+        installs nothing, clones nothing, and writes nothing.
+    - path: "**/*.sh"
+      instructions: >-
+        Bash 3.2-compatible only. Flag Bash 4+ features: associative arrays
+        (declare -A), mapfile/readarray, case-modification expansions
+        (${var^^}, ${var,,}), namerefs (local -n), and ;& / ;;& case
+        fall-through. Quote all variable expansions, treat catalog and user
+        input as untrusted, make shell-startup edits idempotent with managed
+        marker blocks, and keep dry-run paths free of system/user side effects.
+    - path: "**/*.tsv"
+      instructions: >-
+        Catalog data. Confirm it stays tab-separated and parseable by built-in
+        `while read` (no jq/yq dependency), and that every selectable item has a
+        non-empty description field.
+    - path: "**/*.md"
+      instructions: >-
+        Keep all claims consistent with docs/rig-v1-spec.md (the source of
+        truth). Flag any command, path, version strategy, or scope statement
+        that contradicts the spec, and call out drift between docs.
+    - path: ".github/workflows/**"
+      instructions: >-
+        Validate workflow safety: least-privilege `permissions`, no script
+        injection from untrusted ${{ github.* }} values (pass them through
+        `env:` instead of inlining into run scripts), and pin any third-party
+        actions by full commit SHA.
+
+  pre_merge_checks:
+    title:
+      mode: warning
+      requirements: >-
+        Use a conventional prefix matching the repository's issue and PR
+        templates: feat:, fix:, bug:, docs:, chore:, ci:, or refactor:.
+        Keep the subject concise and descriptive.
+    description:
+      mode: warning
+
+  tools:
+    shellcheck:
+      enabled: true
+    markdownlint:
+      enabled: true
+    yamllint:
+      enabled: true
+    actionlint:
+      enabled: true
+    zizmor:
+      enabled: true
+    gitleaks:
+      enabled: true
+    languagetool:
+      enabled: true
+      level: default
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  learnings:
+    scope: local
+  issues:
+    scope: local
+  pull_requests:
+    scope: local
+  web_search:
+    enabled: true
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "**/AGENTS.md"
+      - "**/CLAUDE.md"
