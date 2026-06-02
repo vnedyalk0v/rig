@@ -39,9 +39,37 @@ Out of scope for v1:
 - Require short descriptions for catalog items.
 - Do not silently install everything by default.
 
+## Branching and Pull Request Workflow
+
+`rig` uses two long-lived branches:
+
+- `dev` — the default integration branch. All everyday work targets `dev`.
+- `main` — the stable release branch. The one-line install command runs
+  `install.sh` from `main`, so `main` must always be in a known-good state.
+
+The workflow is:
+
+1. Branch off `dev` (for example `feat/catalog-tsv` or `fix/shell-detection`).
+2. Open your pull request against `dev`. **Never open a feature pull request
+   directly against `main`** — a CI check rejects it.
+3. A maintainer promotes `dev` to `main` with a `dev` -> `main` pull request.
+4. Emergency fixes may use a `hotfix/*` branch that targets `main` directly.
+   After a hotfix merges, the maintainer syncs `main` back into `dev` so the
+   branches do not drift.
+
+Pull requests into `main` are only accepted from `dev` or `hotfix/*` and only
+from this repository; this is enforced by the `verify-base` GitHub Actions
+check (`.github/workflows/pr-base-guard.yml`).
+
+[CodeRabbit](https://coderabbit.ai) reviews every pull request automatically
+using `.coderabbit.yaml`. Address its findings, or reply explaining why a
+suggestion does not apply, before requesting a merge.
+
 ## Pull Request Checklist
 
 Before opening a pull request, confirm:
+
+- [ ] The pull request targets `dev` (or `main` only for a `dev`/`hotfix/*` branch).
 
 - [ ] The change matches `docs/rig-v1-spec.md` or updates the spec.
 - [ ] User-facing behavior is documented in `README.md` or another linked doc.

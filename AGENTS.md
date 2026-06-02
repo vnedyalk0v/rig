@@ -106,6 +106,8 @@ shellcheck install.sh         # if available
 - Never break Bash 3.2 compatibility for clean-Mac entrypoint code.
 - Never auto-enable Homebrew auto-update (default is OFF; always ask).
 - Never commit secrets/tokens or log sensitive values.
+- Never open a pull request from a feature branch directly to `main`; target
+  `dev` (only `dev` and `hotfix/*` may target `main`).
 - Never run destructive git operations (force-push to `main`, hard reset) or
   change git config.
 - Never commit unless explicitly asked.
@@ -113,10 +115,16 @@ shellcheck install.sh         # if available
 ## Commits & Pull Requests
 
 - Small, single-purpose changes that match or update the spec.
+- **Branching:** `dev` is the default integration branch; `main` is the stable
+  release branch. Branch off `dev` and open pull requests against `dev`. Only
+  `dev` and `hotfix/*` branches may target `main`, and the `verify-base` check
+  enforces this.
 - Use the issue/PR title style already in the repo (`feat:`, `bug:`/`fix:`) and
   complete the `.github/pull_request_template.md` checklist.
 - Document user-facing behavior changes in `README.md` or the relevant linked doc.
 - Flag security-relevant changes against `SECURITY.md`.
+- CodeRabbit reviews every pull request via `.coderabbit.yaml`; resolve or
+  answer its findings before merge.
 
 ## Security
 

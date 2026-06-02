@@ -4,6 +4,7 @@
 
 ## Checklist
 
+- [ ] Base branch is `dev` (only `dev` or `hotfix/*` may target `main`).
 - [ ] The change matches `docs/rig-v1-spec.md` or updates the spec.
 - [ ] User-facing behavior is documented.
 - [ ] Security-sensitive behavior is documented or called out.
