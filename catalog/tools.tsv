@@ -1,5 +1,17 @@
 category	id	label	kind	package	default	description	version_strategy	versions	notes
 ide	vscode	Visual Studio Code	cask	visual-studio-code	yes	General-purpose code editor	homebrew-latest		Verified with brew info --cask visual-studio-code on 2026-06-02
+ide	cursor	Cursor	cask	cursor	no	AI-assisted code editor	homebrew-latest		Verified with brew info --cask cursor on 2026-06-02
+ide	zed	Zed	cask	zed	no	High-performance code editor	homebrew-latest		Verified with brew info --cask zed on 2026-06-02
 ai	codex-cli	Codex CLI	cask	codex	no	OpenAI command-line coding agent	homebrew-latest		Verified with brew info --cask codex on 2026-06-02
 browser	chrome	Google Chrome	cask	google-chrome	yes	Mainstream browser	homebrew-latest		Verified with brew info --cask google-chrome on 2026-06-02
-runtime	node-npm	Node.js/npm	external	nvm	no	Node.js runtime plus npm package manager	nvm	latest,lts	External version manager; real install deferred in MVP
+browser	firefox	Firefox	cask	firefox	no	Open-source browser	homebrew-latest		Verified with brew info --cask firefox on 2026-06-02
+browser	brave	Brave	cask	brave-browser	no	Privacy-focused browser	homebrew-latest		Verified with brew info --cask brave-browser on 2026-06-02
+runtime	node-npm	Node.js/npm	external	nvm	no	Node.js runtime plus npm package manager	nvm	latest,lts	External version manager via nvm
+runtime	bun	Bun	external	bun.com/install	no	JavaScript runtime, package manager, and bundler	bun-installer	latest	Official Bun installer
+devops	gh	GitHub CLI	formula	gh	yes	GitHub from the terminal	homebrew-latest		Verified with brew info gh on 2026-06-02
+devops	aws-cli	AWS CLI	formula	awscli	no	Amazon Web Services command-line interface	homebrew-latest		Verified with brew info awscli on 2026-06-02
+infra	terraform	Terraform	version-manager	tenv:tf	no	HashiCorp infrastructure-as-code CLI	tenv	latest	Managed by tenv
+infra	opentofu	OpenTofu	version-manager	tenv:tofu	no	Open-source Terraform-compatible IaC CLI	tenv	latest	Managed by tenv
+infra	terragrunt	Terragrunt	version-manager	tenv:tg	no	Terraform/OpenTofu wrapper for DRY configs	tenv	latest	Managed by tenv
+containers	colima	Colima	formula	colima	no	Container runtime for macOS with minimal setup	homebrew-latest		Verified with brew info colima on 2026-06-02
+productivity	raycast	Raycast	cask	raycast	no	Launcher and productivity utility	homebrew-latest		Verified with brew info --cask raycast on 2026-06-02

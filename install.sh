@@ -15,8 +15,8 @@ Installs or updates the local rig command under:
   ~/.local/share/rig
   ~/.local/bin/rig
 
-In this MVP, workstation package installs are deferred. Use --dry-run to inspect
-the bootstrap steps without creating or changing files.
+After bootstrap, run rig install to set up workstation packages.
+Use --dry-run to inspect bootstrap steps without creating or changing files.
 EOF
 }
 
@@ -129,7 +129,6 @@ if [ "$dry_run" = "yes" ]; then
   printf '[plan] require git for non-dry bootstrap\n'
   printf '[plan] clone or update %s branch %s into %s\n' "$repo_url" "$branch" "$install_root"
   printf '[plan] create symlink %s -> %s\n' "$rig_link" "$rig_target"
-  printf '[plan] run %s dry-run for workstation install previews\n' "$rig_link"
   exit 0
 fi
 
@@ -163,4 +162,4 @@ if [ ! -L "$rig_link" ] && [ ! -e "$rig_link" ]; then
 fi
 
 printf 'rig command installed at %s\n' "$rig_link"
-printf 'Real workstation installs are deferred in this MVP. Run: %s dry-run\n' "$rig_link"
+printf 'Next: run %s install (or %s install --dry-run to preview)\n' "$rig_link" "$rig_link"

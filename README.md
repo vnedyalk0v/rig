@@ -8,58 +8,58 @@ engineers, and platform engineers. The v1 design is captured in
 
 ## Status
 
-This repository is in pre-release MVP development. The project spec is written,
-and the first local `rig` command plus `install.sh` bootstrap foundation exist.
-The MVP can validate the catalog, list tools, run diagnostics, and render dry-run
-plans. It does **not** perform real workstation package installs yet.
+This repository is in pre-release v1 development. The bootstrap installer,
+local `rig` command, catalog, dry-run planning, config generation, and real
+install paths are implemented.
 
-Current MVP implementation:
+Current implementation:
 
 - `install.sh --dry-run` renders the bootstrap plan without creating files, and
   `install.sh` can install or update the local `rig` command.
-- `rig list`, `rig doctor`, `rig dry-run`, `rig install --dry-run`,
-  `rig self-update`, and `rig version` are implemented.
-- Dry-run output previews the selected Brewfile entries, external install plan,
-  macOS defaults, and shell/profile edits without writing them.
-- TSV catalog validation, multi-select flags, category/default filtering,
-  macOS guards, bootstrap URL/branch checks, and command-path conflict checks are
-  covered by local tests.
+- `rig install` writes committable state under `~/.config/rig/` (Brewfile,
+  install-plan.tsv, macos-defaults.sh) and applies it via Homebrew Bundle,
+  version managers, and defaults scripts.
+- `rig install --dry-run`, `rig install --write-config-only`, and
+  `rig install --from-config` support preview, config-only, and replay flows.
+- `rig list`, `rig doctor`, `rig dry-run`, `rig self-update`, `rig update-tools`,
+  and `rig version` are implemented.
+- Interactive install (no flags) uses optional `gum` with a plain Bash fallback.
+- Non-interactive selection uses `--select`, `--defaults`, `--category`, and
+  `--version` flags.
+- TSV catalog validation, multi-select flags, macOS guards, and bootstrap checks
+  are covered by local tests.
 
-Remaining v1 work:
+Remaining polish:
 
-- real workstation package installation through Homebrew/Homebrew Bundle;
-- interactive prompts with optional `gum` and a plain Bash fallback;
-- writing and replaying `~/.config/rig/Brewfile`, external install-plan state,
-  and `macos-defaults.sh`;
-- a broader v1 catalog, supported version prompts, `rig update-tools`, and
-  opt-in Homebrew auto-update setup.
+- expand catalog coverage toward the full v1 breadth (incremental, verify-first);
+- additional macOS defaults and category entries from the spec as they are verified.
 
 The remote install one-liner reads `install.sh` from `main`. Review that exact
-script before running it. Local dry-run testing from a clone is the safe path
-while v1 is being built.
+script before running it. Use `rig install --dry-run` to preview workstation
+changes before applying them.
 
-## Planned v1 Shape
+## v1 Shape
 
-`rig` will be a macOS-only bootstrap tool that:
+`rig` is a macOS-only bootstrap tool that:
 
 - runs from the system `/bin/bash` on a clean Mac;
 - uses Homebrew and Homebrew Bundle for Homebrew-native packages;
 - supports interactive and non-interactive setup flows;
 - includes a dry-run mode that makes no system or user changes;
 - generates a committable `Brewfile`, external install plan, and macOS
-  preferences script;
+  preferences script under `~/.config/rig/`;
 - uses a data-driven TSV catalog with descriptions for every selectable item;
 - supports version-managed tools such as Node.js/npm, Bun, Terraform,
   OpenTofu, and Terragrunt;
 - keeps tool self-updates separate from workstation package updates.
 
-The planned bootstrap command is:
+The bootstrap command is:
 
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/vnedyalk0v/rig/main/install.sh)"
 ```
 
-The planned dry-run bootstrap command is:
+The dry-run bootstrap command is:
 
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/vnedyalk0v/rig/main/install.sh)" -- --dry-run
@@ -68,25 +68,13 @@ The planned dry-run bootstrap command is:
 Remote shell execution has real supply-chain risk. The installer should stay
 small and readable, and users should review `install.sh` before running it.
 
-## Available MVP Commands
-
-```text
-rig install --dry-run
-rig dry-run
-rig list
-rig doctor
-rig self-update
-rig version
-```
-
-`rig install` without `--dry-run` intentionally exits with a deferred message in
-this MVP.
-
-## Planned v1 Commands
+## Commands
 
 ```text
 rig install
 rig install --dry-run
+rig install --write-config-only
+rig install --from-config
 rig dry-run
 rig list
 rig doctor
@@ -94,6 +82,9 @@ rig self-update
 rig update-tools
 rig version
 ```
+
+Run `rig install` with no flags for an interactive setup. Use
+`rig install --dry-run` or `rig dry-run` to preview without changes.
 
 ## Local Validation
 

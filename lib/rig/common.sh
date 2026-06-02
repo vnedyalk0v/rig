@@ -2,6 +2,12 @@
 
 RIG_VERSION=${RIG_VERSION:-0.1.0}
 
+# Used by lib/rig/plan.sh and rig after sourcing this file.
+# shellcheck disable=SC2034
+RIG_INSTALL_USAGE='Usage: rig install [--dry-run] [--write-config-only] [--from-config] [--select <ids>] [--defaults <ids>] [--category <id>] [--version <id=version>] [--brewfile <path>] [--install-plan <path>] [--auto-update]'
+# shellcheck disable=SC2034
+RIG_INSTALL_DESCRIPTION='Run without flags for an interactive install.'
+
 rig_print_error() {
   printf 'rig: %s\n' "$*" >&2
 }
@@ -31,18 +37,19 @@ rig_require_macos() {
 rig_usage() {
   cat <<'EOF'
 Usage:
-  rig install [--dry-run] [--select <ids>] [--defaults <ids>] [--category <id>]
-  rig dry-run [--select <ids>] [--defaults <ids>] [--category <id>]
+  rig install [--dry-run] [--write-config-only] [--from-config] [--select <ids>] [--defaults <ids>] [--category <id>] [--version <id=version>] [--brewfile <path>] [--install-plan <path>] [--auto-update]
+  rig dry-run [--select <ids>] [--defaults <ids>] [--category <id>] [--version <id=version>]
   rig list [--category <id>]
   rig doctor
   rig self-update
+  rig update-tools
   rig version
   rig help
 
 Notes:
-  --select accepts comma-separated catalog ids.
+  --select accepts comma-separated catalog ids (optional id=version).
   --defaults accepts comma-separated macOS defaults ids.
-  Real package installs are deferred in this MVP.
+  Run rig install with no flags for an interactive install.
 EOF
 }
 
@@ -107,6 +114,20 @@ rig_profile_path() {
   esac
 }
 
+rig_seen_contains() {
+  local seen wanted
+  seen=$1
+  wanted=$2
+  case "$seen" in
+    *"
+$wanted
+"*)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
 rig_join_csv_as_lines() {
   local value old_ifs glob_was_disabled item
   value=$1
@@ -128,4 +149,52 @@ rig_join_csv_as_lines() {
   if [ "$glob_was_disabled" = "no" ]; then
     set +f
   fi
+}
+
+rig_args_include() {
+  local wanted arg
+  wanted=$1
+  shift
+  for arg in "$@"; do
+    if [ "$arg" = "$wanted" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+rig_strategy_needs_shell_edit() {
+  case "$1" in
+    nvm|tenv|bun-installer)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+rig_handle_command_help() {
+  local command_label usage_line description unknown_arg
+  command_label=$1
+  usage_line=$2
+  description=$3
+  shift 3
+  if [ "$#" -eq 0 ]; then
+    return 0
+  fi
+  case "$1" in
+    --help|-h)
+      if [ "$#" -gt 1 ]; then
+        rig_print_error "unknown $command_label argument: $2"
+        return 1
+      fi
+      printf '%s\n' "$usage_line"
+      printf '%s\n' "$description"
+      return 0
+      ;;
+    *)
+      unknown_arg=$1
+      rig_print_error "unknown $command_label argument: $unknown_arg"
+      return 1
+      ;;
+  esac
 }

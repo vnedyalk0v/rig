@@ -21,18 +21,18 @@ one-command `install.sh` entrypoint verifies macOS and installs/updates the
 local `rig` command. The current MVP validates the TSV catalog, lists tools,
 runs diagnostics, and renders side-effect-free dry-run plans.
 
-- **Status:** Pre-release MVP. The installer and `rig` command exist, but real
-  workstation package installs are intentionally deferred. `rig install`
-  without `--dry-run` exits with a deferred message.
+- **Status:** Pre-release v1. The installer and `rig` command install workstation
+  packages through Homebrew Bundle, external install plans, and macOS defaults scripts.
+  Use `--dry-run` to preview without changes.
 - **Source of truth:** [`docs/rig-v1-spec.md`](docs/rig-v1-spec.md). Read it
   before any change. If a change conflicts with the spec, either align with the
   spec or update the spec in the same change — never let them drift.
-- **Runtime (planned):** `#!/bin/bash`, **Bash 3.2-compatible**, runs on a clean
+- **Runtime:** `#!/bin/bash`, **Bash 3.2-compatible**, runs on a clean
   Mac with zero installs. `gum` is an optional UI enhancement with a plain-Bash
   fallback.
 - **Install engine:** Homebrew + Homebrew Bundle. Version managers (`nvm`,
   `tenv`, Bun installer) only when Homebrew cannot give the required version.
-- **State (planned):** committable `Brewfile`, external install plan, and
+- **State:** committable `Brewfile`, external install plan, and
   `macos-defaults.sh` under `~/.config/rig/`. Catalog is a **TSV** (no `jq`/`yq`).
 - **No JavaScript/Node toolchain.** Do not add `package.json`, `bun`, or `npm`
   build steps; they do not apply to this project.
@@ -51,12 +51,12 @@ runs diagnostics, and renders side-effect-free dry-run plans.
 - `.coderabbit.yaml` — CodeRabbit review configuration.
 - `install.sh` — remote bootstrap foundation; dry-run must remain mutation-free.
 - `rig` — extensionless Bash 3.2-compatible CLI.
-- `lib/rig/` — shared Bash modules for catalog parsing, dry-run rendering, and
-  diagnostics.
+- `lib/rig/` — shared Bash modules for catalog parsing, dry-run rendering,
+  config generation, Homebrew apply, and diagnostics.
 - `catalog/*.tsv` — tool and macOS defaults catalogs.
 - `scripts/validate-catalog.sh` — TSV validation.
 - `tests/run-tests.sh` — shell behavior tests.
-- *(Planned)* generated `macos-defaults.sh` under `~/.config/rig/`.
+- *(Implemented)* generated `macos-defaults.sh` under `~/.config/rig/`.
 
 ## Key Commands
 

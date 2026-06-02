@@ -23,36 +23,29 @@ Recommended v1 shape:
 - A committable package/config state: `Brewfile`, external install plan, version-manager selections, and a separate macOS preferences script.
 - A `rig self-update` command that updates the local tool clone.
 
-## Current MVP Implementation Status
+## Current Implementation Status
 
-The rest of this document defines the v1 target. As of 2026-06-02, the current
-implementation is a smaller side-effect-light MVP:
+As of 2026-06-02, v1 core install functionality is implemented:
 
 Implemented:
 
-- `install.sh --dry-run` renders the bootstrap plan without creating files.
-- `install.sh` can clone/update the local tool and link the `rig` command.
+- `install.sh --dry-run` and bootstrap clone/symlink for the local `rig` command.
+- `rig install` (interactive and flag-driven), config writes under
+  `~/.config/rig/`, Homebrew Bundle apply, external install-plan replay
+  (nvm, tenv, bun), macOS defaults script generation/apply, and idempotent shell
+  profile managed blocks.
 - `rig list`, `rig doctor`, `rig dry-run`, `rig install --dry-run`,
-  `rig self-update`, and `rig version` exist.
-- The TSV tool/defaults catalogs are validated for shape, known strategies,
-  selectable descriptions, duplicate IDs, and referenced categories/defaults.
-- Dry-run output validates selections and previews Brewfile entries, external
-  install steps, macOS defaults, and shell/profile edits without writing state.
-- macOS-only guards, repeated flag rejection, unknown category rejection,
-  bootstrap URL/branch validation, command-path conflict checks, and
-  `main -> dev` sync workflow repository targeting are covered by tests or
-  repository workflow checks.
+  `rig install --write-config-only`, `rig install --from-config`,
+  `rig self-update`, `rig update-tools`, and `rig version`.
+- Interactive prompts with optional `gum` and plain Bash fallback; non-interactive
+  `--select`, `--defaults`, `--category`, and `--version` flags.
+- Opt-in Homebrew auto-update via `--auto-update` (default OFF).
+- TSV catalog validation, dry-run previews, macOS guards, and regression tests.
 
-Remaining v1 work:
+Remaining incremental work:
 
-- real workstation package installs, Homebrew installation, and `brew bundle`;
-- interactive prompts, optional `gum`, and the plain Bash interactive fallback;
-- writing/replaying `~/.config/rig/Brewfile`, external install-plan state, and
-  `macos-defaults.sh`;
-- supported version prompts for version-managed tools;
-- broader catalog coverage after each formula/cask/installer source is
-  verified;
-- `rig update-tools` and opt-in Homebrew auto-update setup.
+- expand catalog toward full v1 category breadth (verify each formula/cask first);
+- additional AI/vendor external installers deferred until a single tested pattern exists.
 
 ## Finalized Decisions (v1)
 
