@@ -19,15 +19,25 @@ rig_defaults_catalog_path() {
 }
 
 rig_field_count() {
-  printf '%s\n' "$1" | awk -F '\t' '{ print NF; exit }'
+  local line tab count rest
+  line=$1
+  tab=$(printf '\t')
+  count=1
+  rest=$line
+
+  while [ "$rest" != "${rest#*"$tab"}" ]; do
+    count=$((count + 1))
+    rest=${rest#*"$tab"}
+  done
+
+  printf '%s\n' "$count"
 }
 
 rig_tsv_to_record() {
-  printf '%s\n' "$1" | awk -F '\t' -v sep="$RIG_TSV_DELIMITER" '{
-    for (i = 1; i <= NF; i++) {
-      printf "%s%s", $i, (i < NF ? sep : ORS)
-    }
-  }'
+  local line tab
+  line=$1
+  tab=$(printf '\t')
+  printf '%s\n' "${line//$tab/$RIG_TSV_DELIMITER}"
 }
 
 rig_validate_id() {
