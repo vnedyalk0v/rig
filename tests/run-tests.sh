@@ -29,12 +29,15 @@ pass() {
 }
 
 run_capture() {
+  local output_file
   output_file=$1
   shift
   "$@" >"$output_file" 2>&1
+  return $?
 }
 
 assert_contains() {
+  local file expected name
   file=$1
   expected=$2
   name=$3
@@ -49,6 +52,7 @@ assert_contains() {
 }
 
 assert_not_contains() {
+  local file unexpected name
   file=$1
   unexpected=$2
   name=$3
@@ -63,6 +67,7 @@ assert_not_contains() {
 }
 
 assert_success() {
+  local status name
   status=$1
   name=$2
   if [ "$status" -eq 0 ]; then
@@ -73,6 +78,7 @@ assert_success() {
 }
 
 assert_failure() {
+  local status name
   status=$1
   name=$2
   if [ "$status" -ne 0 ]; then
@@ -201,16 +207,107 @@ PATH="$fake_darwin_bin:$PATH" run_capture "$out" ./rig install --dry-run --selec
 assert_success "$?" "rig install --dry-run succeeds"
 assert_contains "$out" "cask \"visual-studio-code\"" "install --dry-run delegates to dry-run"
 
+out="$TEST_TMP/install-interactive-empty.out"
+interactive_home="$TEST_TMP/interactive-home"
+mkdir -p "$interactive_home"
+# shellcheck disable=SC2016
+PATH="$fake_darwin_bin:/usr/bin:/bin" HOME="$interactive_home" RIG_CONFIG_DIR="$interactive_home/.config/rig" run_capture "$out" bash -c '
+  i=0
+  while [ "$i" -lt 40 ]; do
+    printf "\n"
+    i=$((i + 1))
+  done | ./rig install
+'
+assert_success "$?" "rig install interactive default path succeeds with no selections"
+assert_contains "$out" "Wrote rig config" "interactive install writes config"
+assert_success "$([ -f "$interactive_home/.config/rig/Brewfile" ] && echo 0 || echo 1)" "interactive install creates Brewfile"
+
 out="$TEST_TMP/install-dry-run-non-macos.out"
 PATH="$fake_linux_bin:$PATH" RIG_LOGIN_SHELL=/bin/zsh run_capture "$out" ./rig install --dry-run --select vscode
 assert_failure "$?" "rig install --dry-run fails clearly on non-macOS"
 assert_contains "$out" "rig supports macOS only; detected Linux" "install --dry-run reports macOS-only guard"
 assert_not_contains "$out" "cask \"visual-studio-code\"" "install --dry-run does not render a plan on non-macOS"
 
-out="$TEST_TMP/install-real.out"
-PATH="$fake_darwin_bin:$PATH" run_capture "$out" ./rig install
-assert_failure "$?" "rig install without dry-run is deferred"
-assert_contains "$out" "real installs are deferred in this MVP" "deferred install message is clear"
+out="$TEST_TMP/install-write-config.out"
+config_home="$TEST_TMP/config-home"
+mkdir -p "$config_home"
+PATH="$fake_darwin_bin:$PATH" HOME="$config_home" RIG_CONFIG_DIR="$config_home/.config/rig" run_capture "$out" ./rig install --write-config-only --select vscode,chrome --defaults finder-show-hidden-files
+assert_success "$?" "rig install --write-config-only succeeds"
+assert_contains "$out" "Wrote rig config" "write-config-only reports config write"
+assert_success "$([ -f "$config_home/.config/rig/Brewfile" ] && echo 0 || echo 1)" "Brewfile is created"
+assert_success "$([ -f "$config_home/.config/rig/install-plan.tsv" ] && echo 0 || echo 1)" "install-plan.tsv is created"
+assert_success "$([ -f "$config_home/.config/rig/macos-defaults.sh" ] && echo 0 || echo 1)" "macos-defaults.sh is created"
+
+brewfile_content=$(cat "$config_home/.config/rig/Brewfile")
+case "$brewfile_content" in
+  *'cask "visual-studio-code"'*) pass "Brewfile contains VS Code" ;;
+  *) fail "Brewfile contains VS Code" ;;
+esac
+
+out="$TEST_TMP/install-version.out"
+PATH="$fake_darwin_bin:$PATH" HOME="$config_home" RIG_CONFIG_DIR="$config_home/.config/rig" run_capture "$out" ./rig install --write-config-only --select node-npm --version node-npm=lts
+assert_success "$?" "rig install --write-config-only with version succeeds"
+install_plan_file="$config_home/.config/rig/install-plan.tsv"
+out="$TEST_TMP/install-plan-content.out"
+cp "$install_plan_file" "$out"
+assert_contains "$out" $'node-npm\tnvm\tnvm\tlts\t' "install plan records requested version"
+
+out="$TEST_TMP/install-from-config-missing.out"
+PATH="$fake_darwin_bin:$PATH" HOME="$TEST_TMP/empty-home" RIG_CONFIG_DIR="$TEST_TMP/empty-home/.config/rig" run_capture "$out" ./rig install --from-config
+assert_failure "$?" "rig install --from-config fails without config"
+assert_contains "$out" "no rig config found" "from-config reports missing config"
+
+fake_brew_bin="$TEST_TMP/fake-brew-bin"
+fake_brew_log="$TEST_TMP/brew.log"
+mkdir -p "$fake_brew_bin"
+cat >"$fake_brew_bin/brew" <<EOF
+#!/bin/bash
+printf '%s\n' "\$*" >>"$fake_brew_log"
+case "\$1:\$2:\$3" in
+  shellenv)
+    printf 'export PATH=/fake/brew/bin:\$PATH\n'
+    ;;
+  bundle:install:*)
+    exit 0
+    ;;
+  update|upgrade)
+    exit 0
+    ;;
+  tap)
+    exit 0
+    ;;
+  autoupdate:*)
+    exit 0
+    ;;
+  install)
+    exit 0
+    ;;
+esac
+exit 0
+EOF
+chmod +x "$fake_brew_bin/brew"
+rm -f "$fake_brew_log"
+apply_home="$TEST_TMP/apply-home"
+mkdir -p "$apply_home/.config/rig"
+printf 'cask "visual-studio-code"\n' >"$apply_home/.config/rig/Brewfile"
+printf 'id\tstrategy\tpackage\tversion\tlabel\n' >"$apply_home/.config/rig/install-plan.tsv"
+printf '#!/bin/bash\n' >"$apply_home/.config/rig/macos-defaults.sh"
+PATH="$fake_darwin_bin:$fake_brew_bin:$PATH" HOME="$apply_home" RIG_CONFIG_DIR="$apply_home/.config/rig" RIG_SKIP_HOMEBREW_INSTALL=yes run_capture "$out" ./rig install --from-config
+assert_success "$?" "rig install --from-config succeeds with mock brew"
+assert_contains "$fake_brew_log" "bundle install --file=" "from-config invokes brew bundle"
+
+override_home="$TEST_TMP/override-home"
+override_config="$TEST_TMP/override-config"
+override_brewfile="$override_config/Brewfile"
+override_install_plan="$override_config/install-plan.tsv"
+mkdir -p "$override_home" "$override_config"
+printf 'cask "visual-studio-code"\n' >"$override_brewfile"
+printf 'id\tstrategy\tpackage\tversion\tlabel\n' >"$override_install_plan"
+out="$TEST_TMP/install-from-config-overrides.out"
+rm -f "$fake_brew_log"
+PATH="$fake_darwin_bin:$fake_brew_bin:$PATH" HOME="$override_home" RIG_CONFIG_DIR="$override_home/.config/rig" RIG_SKIP_HOMEBREW_INSTALL=yes run_capture "$out" ./rig install --from-config --brewfile "$override_brewfile" --install-plan "$override_install_plan"
+assert_success "$?" "rig install --from-config accepts override files on clean config"
+assert_contains "$fake_brew_log" "bundle install --file=$override_brewfile" "from-config override uses provided Brewfile"
 
 out="$TEST_TMP/install-unknown-arg.out"
 PATH="$fake_darwin_bin:$PATH" run_capture "$out" ./rig install --bogus
@@ -223,15 +320,323 @@ assert_failure "$?" "rig install guards non-macOS before install argument parsin
 assert_contains "$out" "rig supports macOS only; detected Linux" "install unknown argument reports macOS guard first on non-macOS"
 assert_not_contains "$out" "unknown install argument: --bogus" "install unknown argument does not parse unsupported platform"
 
+out="$TEST_TMP/install-help-non-macos.out"
+PATH="$fake_linux_bin:$PATH" run_capture "$out" ./rig install --select vscode --help
+assert_success "$?" "rig install --help works before macOS guard"
+assert_contains "$out" "Usage: rig install" "install help is shown on non-macOS"
+assert_not_contains "$out" "rig supports macOS only" "install help does not enforce macOS"
+
+out="$TEST_TMP/dry-run-version.out"
+PATH="$fake_darwin_bin:$PATH" run_capture "$out" ./rig dry-run --select node-npm --version node-npm=lts
+assert_success "$?" "rig dry-run with version succeeds"
+assert_contains "$out" "node-npm	nvm	lts	Node.js/npm" "dry-run honors version flag"
+
+out="$TEST_TMP/dry-run-select-inline-version.out"
+PATH="$fake_darwin_bin:$PATH" run_capture "$out" ./rig dry-run --select node-npm=lts
+assert_success "$?" "rig dry-run with inline select version succeeds"
+assert_contains "$out" "node-npm	nvm	lts	Node.js/npm" "dry-run honors inline select version"
+
+out="$TEST_TMP/dry-run-invalid-version.out"
+PATH="$fake_darwin_bin:$PATH" run_capture "$out" ./rig dry-run --select node-npm --version node-npm=badversion
+assert_failure "$?" "rig dry-run rejects unsupported version"
+assert_contains "$out" "unsupported version for node-npm" "invalid version is reported"
+
+out="$TEST_TMP/install-from-config-select.out"
+PATH="$fake_darwin_bin:$PATH" HOME="$apply_home" RIG_CONFIG_DIR="$apply_home/.config/rig" run_capture "$out" ./rig install --from-config --select vscode
+assert_failure "$?" "rig install --from-config rejects --select"
+assert_contains "$out" "cannot be combined with --select" "from-config select conflict is reported"
+
+out="$TEST_TMP/install-from-config-write-config.out"
+PATH="$fake_darwin_bin:$PATH" HOME="$apply_home" RIG_CONFIG_DIR="$apply_home/.config/rig" run_capture "$out" ./rig install --from-config --write-config-only
+assert_failure "$?" "rig install --from-config rejects --write-config-only"
+assert_contains "$out" "cannot be combined with --write-config-only" "from-config write-config conflict is reported"
+
+out="$TEST_TMP/install-auto-update.out"
+rm -f "$fake_brew_log"
+PATH="$fake_darwin_bin:$fake_brew_bin:$PATH" HOME="$apply_home" RIG_CONFIG_DIR="$apply_home/.config/rig" RIG_SKIP_HOMEBREW_INSTALL=yes run_capture "$out" ./rig install --from-config --auto-update
+assert_success "$?" "rig install --from-config --auto-update succeeds with mock brew"
+assert_contains "$fake_brew_log" "autoupdate start" "auto-update invokes brew autoupdate start"
+
+out="$TEST_TMP/dry-run-auto-update-preview.out"
+PATH="$fake_darwin_bin:$PATH" run_capture "$out" ./rig dry-run --select vscode --auto-update
+assert_success "$?" "rig dry-run with auto-update succeeds"
+assert_contains "$out" "Auto-update preview" "dry-run shows auto-update preview"
+assert_contains "$out" "homebrew-autoupdate" "dry-run mentions homebrew-autoupdate"
+
+out="$TEST_TMP/install-help-auto-update.out"
+run_capture "$out" ./rig install --help
+assert_success "$?" "rig install --help succeeds"
+assert_contains "$out" "[--auto-update]" "install help includes auto-update flag"
+
+out="$TEST_TMP/rig-usage-install-constant.out"
+RIG_ROOT="$ROOT_DIR" bash -c '
+  . "'"$ROOT_DIR"'/lib/rig/common.sh"
+  RIG_INSTALL_USAGE="Usage: rig install --sentinel"
+  rig_usage
+' >"$out" 2>&1
+assert_success "$?" "rig usage renders with overridden install usage"
+assert_contains "$out" "rig install --sentinel" "rig usage reuses install usage constant"
+
+injection_marker="$TEST_TMP/injection-marker"
+rm -f "$injection_marker"
+out="$TEST_TMP/heredoc-injection-version.out"
+PATH="$fake_darwin_bin:$PATH" run_capture "$out" ./rig dry-run --select node-npm --version "node-npm=lts\$(touch $injection_marker)"
+assert_failure "$?" "dry-run rejects malicious version injection payload"
+if [ -e "$injection_marker" ]; then
+  fail "dry-run does not execute command substitution in --version"
+else
+  pass "dry-run does not execute command substitution in --version"
+fi
+
+out="$TEST_TMP/from-config-dry-run.out"
+PATH="$fake_darwin_bin:$PATH" HOME="$apply_home" RIG_CONFIG_DIR="$apply_home/.config/rig" run_capture "$out" ./rig install --from-config --dry-run
+assert_success "$?" "rig install --from-config --dry-run succeeds"
+assert_contains "$out" 'cask "visual-studio-code"' "from-config dry-run previews saved Brewfile"
+
+tampered_home="$TEST_TMP/tampered-home"
+mkdir -p "$tampered_home/.config/rig"
+printf 'cask "visual-studio-code"\n' >"$tampered_home/.config/rig/Brewfile"
+printf 'id\tstrategy\tpackage\tversion\tlabel\n' >"$tampered_home/.config/rig/install-plan.tsv"
+printf 'node-npm\tevilmanager\tnvm\tlts\tNode.js/npm\n' >>"$tampered_home/.config/rig/install-plan.tsv"
+printf '#!/bin/bash\n' >"$tampered_home/.config/rig/macos-defaults.sh"
+out="$TEST_TMP/tampered-install-plan.out"
+PATH="$fake_darwin_bin:$fake_brew_bin:$PATH" HOME="$tampered_home" RIG_CONFIG_DIR="$tampered_home/.config/rig" RIG_SKIP_HOMEBREW_INSTALL=yes run_capture "$out" ./rig install --from-config
+assert_failure "$?" "rig install --from-config rejects tampered install plan"
+assert_contains "$out" "strategy mismatch" "tampered install plan strategy mismatch is reported"
+
+out="$TEST_TMP/tenv-only-homebrew-required.out"
+RIG_ROOT="$ROOT_DIR" bash -c '
+  . "'"$ROOT_DIR"'/lib/rig/common.sh"
+  . "'"$ROOT_DIR"'/lib/rig/brew.sh"
+  . "'"$ROOT_DIR"'/lib/rig/apply.sh"
+  rig_command_exists() { return 1; }
+  rig_brew_shellenv() {
+    rig_print_error "direct brew shellenv path"
+    return 1
+  }
+  rig_ensure_homebrew() {
+    rig_print_error "Homebrew is required but RIG_SKIP_HOMEBREW_INSTALL=yes"
+    return 1
+  }
+  rig_apply_tenv tenv:tf latest
+' >"$out" 2>&1
+assert_failure "$?" "tenv-only install requires Homebrew before apply"
+assert_contains "$out" "Homebrew is required but RIG_SKIP_HOMEBREW_INSTALL=yes" "tenv-only install uses Homebrew ensure path"
+assert_not_contains "$out" "direct brew shellenv path" "tenv-only install avoids direct shellenv path"
+
+id_prefixed_plan="$TEST_TMP/id-prefixed-install-plan.tsv"
+printf 'id\tstrategy\tpackage\tversion\tlabel\n' >"$id_prefixed_plan"
+printf 'id-local\tnvm\tnvm\tlatest\tId Local\n' >>"$id_prefixed_plan"
+out="$TEST_TMP/id-prefixed-install-plan-apply.out"
+RIG_ROOT="$ROOT_DIR" bash -c '
+  . "'"$ROOT_DIR"'/lib/rig/common.sh"
+  . "'"$ROOT_DIR"'/lib/rig/catalog.sh"
+  . "'"$ROOT_DIR"'/lib/rig/apply.sh"
+  rig_apply_install_plan "'"$id_prefixed_plan"'"
+' >"$out" 2>&1
+assert_failure "$?" "install-plan apply does not skip id-prefixed rows as headers"
+assert_contains "$out" "unknown catalog id: id-local" "id-prefixed apply row is validated"
+
+out="$TEST_TMP/interactive-selection-stub.out"
+PATH="$fake_darwin_bin:$PATH" RIG_ROOT="$ROOT_DIR" bash -c '
+  . "'"$ROOT_DIR"'/lib/rig/common.sh"
+  . "'"$ROOT_DIR"'/lib/rig/catalog.sh"
+  . "'"$ROOT_DIR"'/lib/rig/plan.sh"
+  . "'"$ROOT_DIR"'/lib/rig/prompts.sh"
+  rig_each_category() { printf "ide\n"; }
+  rig_prompt_tools_for_category() { printf "vscode\n"; }
+  rig_prompt_defaults() { return 0; }
+  rig_prompt_auto_update() { printf "no\n"; }
+  rig_validate_catalogs
+  rig_run_interactive_selection
+  printf "tools:%s" "$RIG_PLAN_SELECTED_TOOLS"
+' >"$out" 2>&1
+assert_success "$?" "interactive selection stub succeeds"
+assert_contains "$out" "tools:vscode" "interactive selection stub selects vscode"
+
+prompt_stdout="$TEST_TMP/prompt-tools.stdout"
+prompt_stderr="$TEST_TMP/prompt-tools.stderr"
+PATH="$fake_darwin_bin:/usr/bin:/bin" RIG_ROOT="$ROOT_DIR" bash -c '
+  . "'"$ROOT_DIR"'/lib/rig/common.sh"
+  . "'"$ROOT_DIR"'/lib/rig/catalog.sh"
+  . "'"$ROOT_DIR"'/lib/rig/prompts.sh"
+  rig_validate_catalogs
+  printf "\n" | rig_prompt_tools_for_category ide
+' >"$prompt_stdout" 2>"$prompt_stderr"
+assert_success "$?" "plain tool prompt succeeds with blank selection"
+if [ ! -s "$prompt_stdout" ]; then
+  pass "plain tool prompt keeps stdout selection-only"
+else
+  printf '%s\n' "---- stdout ----"
+  cat "$prompt_stdout"
+  printf '%s\n' "----------------"
+  fail "plain tool prompt keeps stdout selection-only"
+fi
+assert_contains "$prompt_stderr" "Enter numbers or ids" "plain tool prompt writes menu to stderr"
+
+prompt_stdout="$TEST_TMP/prompt-version.stdout"
+prompt_stderr="$TEST_TMP/prompt-version.stderr"
+PATH="$fake_darwin_bin:/usr/bin:/bin" RIG_ROOT="$ROOT_DIR" bash -c '
+  . "'"$ROOT_DIR"'/lib/rig/common.sh"
+  . "'"$ROOT_DIR"'/lib/rig/catalog.sh"
+  . "'"$ROOT_DIR"'/lib/rig/prompts.sh"
+  rig_validate_catalogs
+  printf "lts\n" | rig_prompt_version node-npm latest,lts
+' >"$prompt_stdout" 2>"$prompt_stderr"
+assert_success "$?" "plain version prompt succeeds"
+prompt_value=$(cat "$prompt_stdout")
+if [ "$prompt_value" = "lts" ]; then
+  pass "plain version prompt keeps stdout to selected version"
+else
+  printf '%s\n' "---- stdout ----"
+  cat "$prompt_stdout"
+  printf '%s\n' "----------------"
+  fail "plain version prompt keeps stdout to selected version"
+fi
+assert_contains "$prompt_stderr" "Version [latest]" "plain version prompt writes prompt to stderr"
+
+prompt_stdout="$TEST_TMP/prompt-defaults.stdout"
+prompt_stderr="$TEST_TMP/prompt-defaults.stderr"
+PATH="$fake_darwin_bin:/usr/bin:/bin" RIG_ROOT="$ROOT_DIR" bash -c '
+  . "'"$ROOT_DIR"'/lib/rig/common.sh"
+  . "'"$ROOT_DIR"'/lib/rig/catalog.sh"
+  . "'"$ROOT_DIR"'/lib/rig/prompts.sh"
+  rig_validate_catalogs
+  printf "\n" | rig_prompt_defaults
+' >"$prompt_stdout" 2>"$prompt_stderr"
+assert_success "$?" "plain defaults prompt succeeds with blank selection"
+if [ ! -s "$prompt_stdout" ]; then
+  pass "plain defaults prompt keeps stdout selection-only"
+else
+  printf '%s\n' "---- stdout ----"
+  cat "$prompt_stdout"
+  printf '%s\n' "----------------"
+  fail "plain defaults prompt keeps stdout selection-only"
+fi
+assert_contains "$prompt_stderr" "Optional macOS preferences" "plain defaults prompt writes menu to stderr"
+
+prompt_stdout="$TEST_TMP/prompt-defaults-invalid.stdout"
+prompt_stderr="$TEST_TMP/prompt-defaults-invalid.stderr"
+PATH="$fake_darwin_bin:/usr/bin:/bin" RIG_ROOT="$ROOT_DIR" bash -c '
+  . "'"$ROOT_DIR"'/lib/rig/common.sh"
+  . "'"$ROOT_DIR"'/lib/rig/catalog.sh"
+  . "'"$ROOT_DIR"'/lib/rig/prompts.sh"
+  rig_validate_catalogs
+  printf "does-not-exist\n" | rig_prompt_defaults
+' >"$prompt_stdout" 2>"$prompt_stderr"
+assert_failure "$?" "plain defaults prompt rejects unknown ids"
+assert_contains "$prompt_stderr" "unknown macOS default id: does-not-exist" "plain defaults prompt reports unknown id"
+if [ ! -s "$prompt_stdout" ]; then
+  pass "plain defaults invalid id keeps stdout empty"
+else
+  printf '%s\n' "---- stdout ----"
+  cat "$prompt_stdout"
+  printf '%s\n' "----------------"
+  fail "plain defaults invalid id keeps stdout empty"
+fi
+
+bootstrap_git_bin="$TEST_TMP/bootstrap-git-bin"
+bootstrap_git_log="$TEST_TMP/bootstrap-git.log"
+bootstrap_success_home="$TEST_TMP/bootstrap-success-home"
+mkdir -p "$bootstrap_git_bin" "$bootstrap_success_home"
+cat >"$bootstrap_git_bin/git" <<EOF
+#!/bin/bash
+printf '%s\n' "\$*" >>"$bootstrap_git_log"
+case "\$1" in
+  clone)
+    dest="\${@: -1}"
+    mkdir -p "\$dest/.git"
+    cp -R "$ROOT_DIR/rig" "$ROOT_DIR/lib" "$ROOT_DIR/catalog" "\$dest/" || exit 1
+    exit 0
+    ;;
+  fetch|checkout|pull)
+    exit 0
+    ;;
+esac
+exit 0
+EOF
+chmod +x "$bootstrap_git_bin/git"
+rm -f "$bootstrap_git_log"
+out="$TEST_TMP/bootstrap-success.out"
+HOME="$bootstrap_success_home" PATH="$fake_darwin_bin:$bootstrap_git_bin:$PATH" run_capture "$out" ./install.sh
+assert_success "$?" "install.sh bootstrap succeeds with fake git"
+assert_contains "$out" "rig command installed at" "bootstrap success reports installed command"
+assert_success "$([ -L "$bootstrap_success_home/.local/bin/rig" ] && echo 0 || echo 1)" "bootstrap creates rig symlink"
+assert_contains "$bootstrap_git_log" "clone" "bootstrap invokes git clone"
+
+out="$TEST_TMP/shell-managed-block.out"
+shell_profile="$TEST_TMP/shell-managed.zshrc"
+: >"$shell_profile"
+PATH="$fake_darwin_bin:$PATH" RIG_ROOT="$ROOT_DIR" bash -c '
+  . "'"$ROOT_DIR"'/lib/rig/common.sh"
+  . "'"$ROOT_DIR"'/lib/rig/shell.sh"
+  rig_shell_apply_managed_block "'"$shell_profile"'"
+  rig_shell_apply_managed_block "'"$shell_profile"'"
+'
+assert_success "$?" "shell managed block apply succeeds twice"
+managed_block_count=$(grep -c '# >>> rig managed >>>' "$shell_profile" || true)
+if [ "$managed_block_count" -eq 1 ]; then
+  pass "shell managed block remains idempotent"
+else
+  fail "shell managed block remains idempotent (expected 1 block, got $managed_block_count)"
+fi
+
+out="$TEST_TMP/shell-marker-constants.out"
+RIG_ROOT="$ROOT_DIR" bash -c '
+  . "'"$ROOT_DIR"'/lib/rig/shell.sh"
+  RIG_SHELL_MARKER_START="# >>> custom rig >>>"
+  RIG_SHELL_MARKER_END="# <<< custom rig <<<"
+  rig_shell_managed_block_content zsh
+' >"$out" 2>&1
+assert_success "$?" "shell managed block renders with custom markers"
+assert_contains "$out" "# >>> custom rig >>>" "shell block start marker uses constant"
+assert_contains "$out" "# <<< custom rig <<<" "shell block end marker uses constant"
+
+out="$TEST_TMP/update-tools-help.out"
+run_capture "$out" ./rig update-tools --help
+assert_success "$?" "rig update-tools --help succeeds"
+assert_contains "$out" "Usage: rig update-tools" "update-tools help is shown"
+
+out="$TEST_TMP/update-tools.out"
+rm -f "$fake_brew_log"
+PATH="$fake_darwin_bin:$fake_brew_bin:$PATH" run_capture "$out" ./rig update-tools
+assert_success "$?" "rig update-tools succeeds with mock brew"
+assert_contains "$fake_brew_log" "update" "update-tools runs brew update"
+
 out="$TEST_TMP/install-help-anywhere.out"
 run_capture "$out" ./rig install --select vscode --help
 assert_success "$?" "rig install --help is honored in any position"
 assert_contains "$out" "Usage: rig install" "install help is shown regardless of argument position"
 
+out="$TEST_TMP/emit-brewfile.out"
+PATH="$fake_darwin_bin:$PATH" RIG_ROOT="$ROOT_DIR" RIG_LOGIN_SHELL=/bin/zsh bash -c '
+  . "'"$ROOT_DIR"'/lib/rig/common.sh"
+  . "'"$ROOT_DIR"'/lib/rig/catalog.sh"
+  . "'"$ROOT_DIR"'/lib/rig/plan.sh"
+  rig_validate_catalogs
+  selected=$(rig_collect_selected_tools "vscode,chrome" "")
+  rig_emit_brewfile_content "$selected"
+' >"$TEST_TMP/emit-brewfile.out" 2>&1
+assert_success "$?" "emit brewfile helper succeeds"
+assert_contains "$TEST_TMP/emit-brewfile.out" "cask \"visual-studio-code\"" "emit helper includes VS Code"
+
 out="$TEST_TMP/shell-edit-detection.out"
 PATH="$fake_darwin_bin:$PATH" RIG_LOGIN_SHELL=/bin/zsh run_capture "$out" ./rig dry-run --select node-npm
 assert_success "$?" "dry-run with version-manager selection succeeds"
 assert_contains "$out" "Would add managed rig initialization block" "shell-edit detection fires for version-manager selection"
+
+id_prefixed_shell_plan="$TEST_TMP/id-prefixed-shell-plan.tsv"
+printf 'id\tstrategy\tpackage\tversion\tlabel\n' >"$id_prefixed_shell_plan"
+printf 'id-node\tnvm\tnvm\tlatest\tId Node\n' >>"$id_prefixed_shell_plan"
+out="$TEST_TMP/id-prefixed-shell-edit-count.out"
+RIG_ROOT="$ROOT_DIR" bash -c '
+  . "'"$ROOT_DIR"'/lib/rig/common.sh"
+  . "'"$ROOT_DIR"'/lib/rig/catalog.sh"
+  . "'"$ROOT_DIR"'/lib/rig/plan.sh"
+  rig_count_shell_edits_from_plan_file "'"$id_prefixed_shell_plan"'"
+' >"$out" 2>&1
+assert_success "$?" "shell edit count reads id-prefixed install-plan rows"
+assert_contains "$out" "1" "shell edit count does not skip id-prefixed rows as headers"
 
 invalid_mas_catalog="$TEST_TMP/invalid-mas-tools.tsv"
 {

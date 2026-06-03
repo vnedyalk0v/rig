@@ -1,7 +1,7 @@
 # Security Policy
 
-`rig` is a macOS bootstrap tool that will eventually install developer tools,
-edit shell startup files, generate local configuration, and optionally apply
+`rig` is a macOS bootstrap tool that installs developer tools, edits managed
+shell startup blocks, generates local configuration, and optionally applies
 macOS defaults. Security reports for this project should treat installer
 behavior and supply-chain behavior as sensitive.
 
@@ -12,16 +12,19 @@ The project is pre-release. Until tagged releases exist, only the current
 
 ## Current MVP Security Posture
 
-Real workstation package installs, `brew bundle`, generated config writes,
-shell startup edits, macOS defaults, and LaunchAgents are not active yet. The
-implemented security-sensitive surfaces are the remote bootstrap script, local
-tool bootstrap/update, CLI argument parsing, catalog parsing, dry-run rendering,
-and `rig self-update`.
+The implemented security-sensitive surfaces are the remote bootstrap script,
+local tool bootstrap/update, CLI argument parsing, catalog parsing, dry-run
+rendering, generated config writes under the rig config directory, Homebrew
+Bundle apply, external install-plan replay, managed shell startup blocks,
+opt-in macOS defaults scripts, optional Homebrew auto-update setup, and
+`rig self-update`.
 
 Keep the current protections covered: non-macOS commands fail before rendering
 plans or invoking update work, dry-run paths create no user or system state,
-unsafe bootstrap repository URLs and option-like branch names are rejected, and
-command-path conflicts fail before clone/update work.
+generated shell edits stay idempotent, install-plan replay validates catalog
+identity and strategy before invoking external installers, unsafe bootstrap
+repository URLs and option-like branch names are rejected, and command-path
+conflicts fail before clone/update work.
 
 ## Reporting a Vulnerability
 

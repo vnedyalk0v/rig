@@ -19,19 +19,15 @@ rig_defaults_catalog_path() {
 }
 
 rig_field_count() {
-  awk -F '\t' '{ print NF; exit }' <<EOF
-$1
-EOF
+  printf '%s\n' "$1" | awk -F '\t' '{ print NF; exit }'
 }
 
 rig_tsv_to_record() {
-  awk -F '\t' -v sep="$RIG_TSV_DELIMITER" '{
+  printf '%s\n' "$1" | awk -F '\t' -v sep="$RIG_TSV_DELIMITER" '{
     for (i = 1; i <= NF; i++) {
       printf "%s%s", $i, (i < NF ? sep : ORS)
     }
-  }' <<EOF
-$1
-EOF
+  }'
 }
 
 rig_validate_id() {
@@ -75,9 +71,7 @@ rig_record_field() {
   local -a fields
   record=$1
   index=$2
-  IFS="$RIG_TSV_DELIMITER" read -r -a fields <<EOF
-$record
-EOF
+  IFS="$RIG_TSV_DELIMITER" read -r -a fields < <(printf '%s\n' "$record")
   field_index=$((index - 1))
   if [ "$field_index" -ge 0 ]; then
     printf '%s' "${fields[$field_index]}"
@@ -104,7 +98,7 @@ rig_validate_catalog() {
 '
   row_count=0
 
-  # row_validator only reads its $record argument (a heredoc), never the catalog file.
+  # row_validator reads its record argument, never the catalog file.
   # shellcheck disable=SC2094
   while IFS= read -r line || [ "$line" != "" ]; do
     line_no=$((line_no + 1))
@@ -161,9 +155,7 @@ rig_validate_tools_row() {
   catalog_path=$1
   line_no=$2
   record=$3
-  IFS="$RIG_TSV_DELIMITER" read -r category id label kind package default_flag description version_strategy _versions _notes <<EOF
-$record
-EOF
+  IFS="$RIG_TSV_DELIMITER" read -r category id label kind package default_flag description version_strategy _versions _notes < <(printf '%s\n' "$record")
 
   if ! rig_validate_id "$category"; then
     rig_print_error "$catalog_path:$line_no: invalid category: $category"
@@ -224,9 +216,7 @@ rig_validate_defaults_row() {
   catalog_path=$1
   line_no=$2
   record=$3
-  IFS="$RIG_TSV_DELIMITER" read -r id label description command_text _restart_hint <<EOF
-$record
-EOF
+  IFS="$RIG_TSV_DELIMITER" read -r id label description command_text _restart_hint < <(printf '%s\n' "$record")
 
   if [ "$label" = "" ]; then
     rig_print_error "$catalog_path:$line_no: label is required"
@@ -295,14 +285,37 @@ rig_lookup_record() {
       printf '%s\n' "$record"
       return 0
     fi
-  done <<EOF
-$("$producer")
-EOF
+  done < <("$producer")
   return 1
 }
 
 rig_lookup_tool() {
   rig_lookup_record rig_each_tool "$1" 2
+}
+
+rig_validate_tool_version() {
+  local tool_id version row allowed_versions entry
+  tool_id=$1
+  version=$2
+  if ! row=$(rig_lookup_tool "$tool_id"); then
+    rig_print_error "unknown catalog id for version: $tool_id"
+    return 1
+  fi
+  allowed_versions=$(rig_record_field "$row" 9)
+  if [ "$allowed_versions" = "" ]; then
+    rig_print_error "catalog id $tool_id does not support version selection"
+    return 1
+  fi
+  while IFS= read -r entry || [ "$entry" != "" ]; do
+    if [ "$entry" = "" ]; then
+      continue
+    fi
+    if [ "$entry" = "$version" ]; then
+      return 0
+    fi
+  done < <(rig_join_csv_as_lines "$allowed_versions")
+  rig_print_error "unsupported version for $tool_id: $version (allowed: $allowed_versions)"
+  return 1
 }
 
 rig_tool_category_exists() {
@@ -312,15 +325,11 @@ rig_tool_category_exists() {
     if [ "$record" = "" ]; then
       continue
     fi
-    IFS="$RIG_TSV_DELIMITER" read -r category _id _label _kind _package _default_flag _description _version_strategy _versions _notes <<EOF
-$record
-EOF
+    IFS="$RIG_TSV_DELIMITER" read -r category _id _label _kind _package _default_flag _description _version_strategy _versions _notes < <(printf '%s\n' "$record")
     if [ "$category" = "$wanted" ]; then
       return 0
     fi
-  done <<EOF
-$(rig_each_tool)
-EOF
+  done < <(rig_each_tool)
   return 1
 }
 
