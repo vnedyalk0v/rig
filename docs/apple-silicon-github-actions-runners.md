@@ -59,16 +59,19 @@ clean retail machine.
 
 Use three layers instead of making every pull request perform a heavy install.
 
-### 1. Required Apple Silicon Smoke
+### 1. Required Apple Silicon Dry-Run Smoke
 
-Run on every pull request and pushes to `dev` / `main`.
+Implemented as the `Apple Silicon dry-run smoke` job in
+`.github/workflows/apple-silicon-smoke.yml`. It runs on every pull request and
+push to `dev` / `main`, on a weekly schedule, and through `workflow_dispatch`
+for explicit reruns.
 
 Purpose:
 
 - prove the shell runs on real macOS arm64;
 - prove dry-run stays side-effect free;
-- prove config generation works with a temporary `HOME`;
-- run the existing local validation surface.
+- run the existing local validation surface, including regression tests that
+  cover temporary-home config generation.
 
 Best practices:
 
@@ -81,6 +84,8 @@ Best practices:
 - pin third-party actions to full commit SHAs;
 - set `persist-credentials: false` on `actions/checkout`;
 - set a short `timeout-minutes`, for example 20.
+- do not use path filters if the job is configured as a required check, because
+  skipped required checks can block pull requests.
 
 Useful command shape:
 
@@ -90,6 +95,10 @@ test "$(uname -m)" = "arm64"
 /bin/bash --version | head -n 1
 sw_vers
 
+export HOME="$RUNNER_TEMP/rig-dry-run-home"
+export RIG_CONFIG_DIR="$HOME/.config/rig"
+mkdir -p "$HOME"
+
 for f in install.sh rig lib/rig/*.sh scripts/*.sh tests/*.sh; do
   bash -n "$f"
 done
@@ -97,6 +106,9 @@ bash tests/run-tests.sh
 ./scripts/validate-catalog.sh
 ./rig dry-run --select vscode,chrome,node-npm --defaults finder-show-hidden-files
 ./install.sh --dry-run
+test ! -e "$RIG_CONFIG_DIR"
+test ! -e "$HOME/.local/share/rig"
+test ! -e "$HOME/.local/bin/rig"
 git diff --check
 ```
 
@@ -105,9 +117,15 @@ only those validation tools through Homebrew in the smoke job. Keep this
 separate from testing `rig` installs so validator setup does not hide product
 behavior.
 
-### 2. Manual Apple Silicon Install Smoke
+Required CI intentionally uses dry-run product commands only. It does not run
+real `brew bundle` installs or replay external installers.
 
-Run with `workflow_dispatch`, and optionally on a low-frequency schedule.
+### 2. Automatic Apple Silicon Install Smoke
+
+Implemented as the `Apple Silicon install smoke` job in
+`.github/workflows/apple-silicon-smoke.yml`. It runs after the dry-run smoke on
+pull requests and pushes to `dev` / `main`, on the weekly schedule, and through
+`workflow_dispatch`.
 
 Purpose:
 
@@ -125,7 +143,9 @@ export RIG_CONFIG_DIR="$HOME/.config/rig"
 mkdir -p "$HOME"
 
 ./rig install --write-config-only --select gh
+grep -F 'brew "gh"' "$RIG_CONFIG_DIR/Brewfile"
 ./rig install --from-config
+brew bundle check --file="$RIG_CONFIG_DIR/Brewfile"
 gh --version
 ```
 
@@ -142,9 +162,13 @@ export RIG_SKIP_HOMEBREW_INSTALL=yes
 GitHub macOS images already include Homebrew. It prevents the test from hiding
 a missing runner Homebrew setup by running the Homebrew installer.
 
+The implemented install smoke uses only the `gh` formula selection. It does not
+install GUI casks, Mac App Store apps, external installers, or Homebrew
+auto-update state.
+
 ### 3. Manual External Installer Smoke
 
-Run only on demand.
+Deferred for a future manual workflow. Run only on demand.
 
 Purpose:
 
@@ -165,59 +189,20 @@ Do not test `--auto-update` with real Homebrew auto-update in GitHub-hosted CI.
 It can create launchd/background state and is not useful enough for a required
 runner check. Keep auto-update coverage mocked or manual.
 
-## Suggested Workflow Skeleton
+## Implemented Workflows
 
-This is a design skeleton, not a ready-to-copy workflow. Replace the checkout
-placeholder with the reviewed full commit SHA for the chosen `actions/checkout`
-release before adding a workflow.
+- `.github/workflows/apple-silicon-smoke.yml` runs both `Apple Silicon dry-run
+  smoke` and `Apple Silicon install smoke` on `macos-15` for pull requests,
+  pushes, the weekly schedule, and explicit reruns.
 
-```yaml
-name: Apple Silicon smoke
+The workflow uses a pinned `actions/checkout` commit, sets
+`persist-credentials: false`, and keeps `permissions: contents: read`.
 
-on:
-  pull_request:
-    branches: [dev, main]
-  push:
-    branches: [dev, main]
+After the workflow lands on `dev` and each job has reported at least once, the
+rulesets should require these job names:
 
-permissions:
-  contents: read
-
-concurrency:
-  group: apple-silicon-smoke-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
-jobs:
-  smoke:
-    runs-on: macos-15
-    timeout-minutes: 20
-    env:
-      HOMEBREW_NO_AUTO_UPDATE: "1"
-      HOMEBREW_NO_INSTALL_CLEANUP: "1"
-    steps:
-      - name: Checkout
-        uses: actions/checkout@<full-commit-sha>
-        with:
-          persist-credentials: false
-
-      - name: Verify Apple Silicon runner
-        run: |
-          test "$(uname -s)" = "Darwin"
-          test "$(uname -m)" = "arm64"
-          sw_vers
-          /bin/bash --version | head -n 1
-
-      - name: Run rig smoke checks
-        run: |
-          for f in install.sh rig lib/rig/*.sh scripts/*.sh tests/*.sh; do
-            bash -n "$f"
-          done
-          bash tests/run-tests.sh
-          ./scripts/validate-catalog.sh
-          ./rig dry-run --select vscode,chrome,node-npm --defaults finder-show-hidden-files
-          ./install.sh --dry-run
-          git diff --check
-```
+- `Apple Silicon dry-run smoke`
+- `Apple Silicon install smoke`
 
 ## Operational Guardrails
 
