@@ -32,6 +32,11 @@ Out of scope for v1:
 - Preserve Bash 3.2 compatibility for scripts that must run on a clean macOS
   install.
 - Prefer Homebrew Bundle for Homebrew-native packages.
+- Do not install Homebrew silently. Interactive installs ask for approval;
+  non-interactive installs require explicit `--yes` only when Homebrew is
+  missing and installation would proceed.
+- Do not let interactive prompts run on non-terminal stdin; scripts and CI must
+  use explicit selection flags or config replay.
 - Use explicit version managers or vendor installers only when Homebrew cannot
   provide the required version behavior.
 - Make shell configuration edits idempotent with managed markers.
@@ -123,7 +128,7 @@ for f in install.sh rig lib/rig/*.sh scripts/*.sh tests/*.sh; do
 done
 bash tests/run-tests.sh
 ./scripts/validate-catalog.sh
-./rig dry-run --select vscode,chrome,node-npm --defaults finder-show-hidden-files
+./rig install --dry-run --select vscode,chrome,node-npm --defaults finder-show-hidden-files
 ./install.sh --dry-run
 shellcheck install.sh rig lib/rig/*.sh scripts/*.sh tests/*.sh
 actionlint .github/workflows/*.yml

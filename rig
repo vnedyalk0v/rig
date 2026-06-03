@@ -33,15 +33,6 @@ RIG_ROOT=$(resolve_rig_root "$0")
 . "$RIG_ROOT/lib/rig/doctor.sh"
 
 rig_install_command() {
-  if [ "$#" -eq 0 ]; then
-    rig_require_macos || return 1
-    rig_validate_catalogs || return 1
-    rig_run_interactive_selection || return 1
-    rig_write_plan_config || return 1
-    rig_finish_install_apply || return 1
-    return 0
-  fi
-
   if rig_args_include --help "$@" || rig_args_include -h "$@"; then
     rig_run_install "$@"
     return $?

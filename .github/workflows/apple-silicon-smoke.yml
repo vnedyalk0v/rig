@@ -1,0 +1,136 @@
+name: Apple Silicon CI
+
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev, main]
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apple-silicon-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Apple Silicon smoke
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+
+      - name: Verify Apple Silicon runner
+        run: |
+          test "$(uname -s)" = "Darwin"
+          test "$(uname -m)" = "arm64"
+          sw_vers
+          /bin/bash --version | head -n 1
+
+      - name: Run validation and dry-run checks
+        run: |
+          export HOME="$RUNNER_TEMP/rig-test-home"
+          export RIG_CONFIG_DIR="$HOME/.config/rig"
+          mkdir -p "$HOME"
+
+          assert_empty_stderr() {
+            local stderr_file
+            stderr_file=$1
+            if [ -s "$stderr_file" ]; then
+              cat "$stderr_file" >&2
+              return 1
+            fi
+            return 0
+          }
+
+          for f in install.sh rig lib/rig/*.sh scripts/*.sh tests/*.sh; do
+            bash -n "$f"
+          done
+          bash tests/run-tests.sh
+          ./scripts/validate-catalog.sh
+
+          export HOME="$RUNNER_TEMP/rig-dry-run-home"
+          export RIG_CONFIG_DIR="$HOME/.config/rig"
+          mkdir -p "$HOME"
+
+          RIG_SKIP_HOMEBREW_INSTALL=yes ./rig install --dry-run --select vscode,chrome,node-npm --defaults finder-show-hidden-files 2>"$RUNNER_TEMP/rig-dry-run.stderr"
+          assert_empty_stderr "$RUNNER_TEMP/rig-dry-run.stderr"
+          ./install.sh --dry-run 2>"$RUNNER_TEMP/install-dry-run.stderr"
+          assert_empty_stderr "$RUNNER_TEMP/install-dry-run.stderr"
+
+          test ! -e "$RIG_CONFIG_DIR"
+          test ! -e "$HOME/.local/share/rig"
+          test ! -e "$HOME/.local/bin/rig"
+
+          git diff --check
+
+      - name: Run end-to-end install
+        run: |
+          export HOME="$RUNNER_TEMP/rig-e2e-home"
+          export RIG_CONFIG_DIR="$HOME/.config/rig"
+          export NVM_DIR="$HOME/.nvm"
+          export RIG_LOGIN_SHELL=/bin/bash
+          mkdir -p "$HOME"
+
+          if brew list --formula gh >/dev/null 2>&1; then
+            brew uninstall --formula --ignore-dependencies gh
+          fi
+          if brew list --formula gh >/dev/null 2>&1; then
+            printf 'gh formula is still installed before rig install\n' >&2
+            exit 1
+          fi
+
+          ./rig install --write-config-only --select gh,node-npm=lts
+          grep -F 'brew "gh"' "$RIG_CONFIG_DIR/Brewfile"
+          grep -F $'node-npm\tnvm\tnvm\tlts\tNode.js/npm' "$RIG_CONFIG_DIR/install-plan.tsv"
+
+          ./rig install --from-config
+          brew bundle check --file="$RIG_CONFIG_DIR/Brewfile"
+          brew list --formula gh
+          gh --version
+
+          test -s "$NVM_DIR/nvm.sh"
+          test -f "$HOME/.bash_profile"
+          grep -F '# >>> rig managed >>>' "$HOME/.bash_profile"
+          grep -F 'NVM_DIR' "$HOME/.bash_profile"
+
+          # shellcheck disable=SC1091
+          . "$NVM_DIR/nvm.sh"
+          nvm current
+          node --version
+          npm --version
+
+          node_path=$(command -v node)
+          npm_path=$(command -v npm)
+          case "$node_path" in
+            "$NVM_DIR"/*) ;;
+            *) printf 'node resolved outside nvm: %s\n' "$node_path" >&2; exit 1 ;;
+          esac
+          case "$npm_path" in
+            "$NVM_DIR"/*) ;;
+            *) printf 'npm resolved outside nvm: %s\n' "$npm_path" >&2; exit 1 ;;
+          esac
+
+      - name: Install validation tools
+        run: |
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            brew install shellcheck
+          fi
+          if ! command -v actionlint >/dev/null 2>&1; then
+            brew install actionlint
+          fi
+
+      - name: Run validation tools
+        run: |
+          shellcheck install.sh rig lib/rig/*.sh scripts/*.sh tests/*.sh
+          actionlint .github/workflows/*.yml

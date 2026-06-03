@@ -19,15 +19,25 @@ rig_defaults_catalog_path() {
 }
 
 rig_field_count() {
-  printf '%s\n' "$1" | awk -F '\t' '{ print NF; exit }'
+  local line tab count rest
+  line=$1
+  tab=$(printf '\t')
+  count=1
+  rest=$line
+
+  while [ "$rest" != "${rest#*"$tab"}" ]; do
+    count=$((count + 1))
+    rest=${rest#*"$tab"}
+  done
+
+  printf '%s\n' "$count"
 }
 
 rig_tsv_to_record() {
-  printf '%s\n' "$1" | awk -F '\t' -v sep="$RIG_TSV_DELIMITER" '{
-    for (i = 1; i <= NF; i++) {
-      printf "%s%s", $i, (i < NF ? sep : ORS)
-    }
-  }'
+  local line tab
+  line=$1
+  tab=$(printf '\t')
+  printf '%s\n' "${line//$tab/$RIG_TSV_DELIMITER}"
 }
 
 rig_validate_id() {
@@ -273,19 +283,25 @@ rig_each_default() {
 }
 
 rig_lookup_record() {
-  local producer wanted id_field record
+  local producer wanted id_field record match found
   producer=$1
   wanted=$2
   id_field=$3
+  match=
+  found=no
   while IFS= read -r record || [ "$record" != "" ]; do
     if [ "$record" = "" ]; then
       continue
     fi
-    if [ "$(rig_record_field "$record" "$id_field")" = "$wanted" ]; then
-      printf '%s\n' "$record"
-      return 0
+    if [ "$found" = "no" ] && [ "$(rig_record_field "$record" "$id_field")" = "$wanted" ]; then
+      match=$record
+      found=yes
     fi
   done < <("$producer")
+  if [ "$found" = "yes" ]; then
+    printf '%s\n' "$match"
+    return 0
+  fi
   return 1
 }
 
@@ -294,7 +310,7 @@ rig_lookup_tool() {
 }
 
 rig_validate_tool_version() {
-  local tool_id version row allowed_versions entry
+  local tool_id version row allowed_versions entry found
   tool_id=$1
   version=$2
   if ! row=$(rig_lookup_tool "$tool_id"); then
@@ -306,30 +322,41 @@ rig_validate_tool_version() {
     rig_print_error "catalog id $tool_id does not support version selection"
     return 1
   fi
+  found=no
   while IFS= read -r entry || [ "$entry" != "" ]; do
     if [ "$entry" = "" ]; then
       continue
     fi
     if [ "$entry" = "$version" ]; then
-      return 0
+      found=yes
     fi
   done < <(rig_join_csv_as_lines "$allowed_versions")
+  if [ "$found" = "yes" ]; then
+    return 0
+  fi
   rig_print_error "unsupported version for $tool_id: $version (allowed: $allowed_versions)"
   return 1
 }
 
 rig_tool_category_exists() {
-  local wanted record category _id _label _kind _package _default_flag _description _version_strategy _versions _notes
+  local wanted record found category _id _label _kind _package _default_flag _description _version_strategy _versions _notes
   wanted=$1
+  found=no
   while IFS= read -r record || [ "$record" != "" ]; do
     if [ "$record" = "" ]; then
       continue
     fi
+    if [ "$found" = "yes" ]; then
+      continue
+    fi
     IFS="$RIG_TSV_DELIMITER" read -r category _id _label _kind _package _default_flag _description _version_strategy _versions _notes < <(printf '%s\n' "$record")
     if [ "$category" = "$wanted" ]; then
-      return 0
+      found=yes
     fi
   done < <(rig_each_tool)
+  if [ "$found" = "yes" ]; then
+    return 0
+  fi
   return 1
 }
 
