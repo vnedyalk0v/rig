@@ -39,7 +39,7 @@ jobs:
 
       - name: Run validation and dry-run checks
         run: |
-          export HOME="$RUNNER_TEMP/rig-dry-run-home"
+          export HOME="$RUNNER_TEMP/rig-test-home"
           export RIG_CONFIG_DIR="$HOME/.config/rig"
           mkdir -p "$HOME"
 
@@ -58,6 +58,11 @@ jobs:
           done
           bash tests/run-tests.sh
           ./scripts/validate-catalog.sh
+
+          export HOME="$RUNNER_TEMP/rig-dry-run-home"
+          export RIG_CONFIG_DIR="$HOME/.config/rig"
+          mkdir -p "$HOME"
+
           RIG_SKIP_HOMEBREW_INSTALL=yes ./rig install --dry-run --select vscode,chrome,node-npm --defaults finder-show-hidden-files 2>"$RUNNER_TEMP/rig-dry-run.stderr"
           assert_empty_stderr "$RUNNER_TEMP/rig-dry-run.stderr"
           ./install.sh --dry-run 2>"$RUNNER_TEMP/install-dry-run.stderr"

@@ -105,7 +105,7 @@ test "$(uname -m)" = "arm64"
 /bin/bash --version | head -n 1
 sw_vers
 
-export HOME="$RUNNER_TEMP/rig-dry-run-home"
+export HOME="$RUNNER_TEMP/rig-test-home"
 export RIG_CONFIG_DIR="$HOME/.config/rig"
 mkdir -p "$HOME"
 
@@ -114,6 +114,11 @@ for f in install.sh rig lib/rig/*.sh scripts/*.sh tests/*.sh; do
 done
 bash tests/run-tests.sh
 ./scripts/validate-catalog.sh
+
+export HOME="$RUNNER_TEMP/rig-dry-run-home"
+export RIG_CONFIG_DIR="$HOME/.config/rig"
+mkdir -p "$HOME"
+
 RIG_SKIP_HOMEBREW_INSTALL=yes ./rig install --dry-run --select vscode,chrome,node-npm --defaults finder-show-hidden-files
 ./install.sh --dry-run
 test ! -e "$RIG_CONFIG_DIR"
@@ -122,9 +127,10 @@ test ! -e "$HOME/.local/bin/rig"
 git diff --check
 ```
 
-Scope `RIG_SKIP_HOMEBREW_INSTALL=yes` to the dry-run command only. Do not
-export it for the whole job because the regression suite exercises the fake
-Homebrew installer path.
+The test suite and dry-run state assertions use separate temporary homes. Scope
+`RIG_SKIP_HOMEBREW_INSTALL=yes` to the dry-run command only. Do not export it
+for the whole job because the regression suite exercises the fake Homebrew
+installer path.
 
 If `shellcheck` or `actionlint` is not already present on the runner, install
 only those validation tools through Homebrew after the product install phase,
