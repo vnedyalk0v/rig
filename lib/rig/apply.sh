@@ -72,7 +72,7 @@ rig_apply_tenv() {
   package=$1
   version=$2
   if ! rig_command_exists tenv; then
-    rig_brew_shellenv || return 1
+    rig_ensure_homebrew || return 1
     brew install tenv || return 1
   fi
   tool_name=${package#tenv:}

@@ -98,7 +98,7 @@ rig_validate_catalog() {
 '
   row_count=0
 
-  # row_validator only reads its $record argument (a heredoc), never the catalog file.
+  # row_validator reads its record argument, never the catalog file.
   # shellcheck disable=SC2094
   while IFS= read -r line || [ "$line" != "" ]; do
     line_no=$((line_no + 1))

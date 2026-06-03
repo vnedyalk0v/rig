@@ -368,6 +368,15 @@ run_capture "$out" ./rig install --help
 assert_success "$?" "rig install --help succeeds"
 assert_contains "$out" "[--auto-update]" "install help includes auto-update flag"
 
+out="$TEST_TMP/rig-usage-install-constant.out"
+RIG_ROOT="$ROOT_DIR" bash -c '
+  . "'"$ROOT_DIR"'/lib/rig/common.sh"
+  RIG_INSTALL_USAGE="Usage: rig install --sentinel"
+  rig_usage
+' >"$out" 2>&1
+assert_success "$?" "rig usage renders with overridden install usage"
+assert_contains "$out" "rig install --sentinel" "rig usage reuses install usage constant"
+
 injection_marker="$TEST_TMP/injection-marker"
 rm -f "$injection_marker"
 out="$TEST_TMP/heredoc-injection-version.out"
@@ -394,6 +403,26 @@ out="$TEST_TMP/tampered-install-plan.out"
 PATH="$fake_darwin_bin:$fake_brew_bin:$PATH" HOME="$tampered_home" RIG_CONFIG_DIR="$tampered_home/.config/rig" RIG_SKIP_HOMEBREW_INSTALL=yes run_capture "$out" ./rig install --from-config
 assert_failure "$?" "rig install --from-config rejects tampered install plan"
 assert_contains "$out" "strategy mismatch" "tampered install plan strategy mismatch is reported"
+
+out="$TEST_TMP/tenv-only-homebrew-required.out"
+RIG_ROOT="$ROOT_DIR" bash -c '
+  . "'"$ROOT_DIR"'/lib/rig/common.sh"
+  . "'"$ROOT_DIR"'/lib/rig/brew.sh"
+  . "'"$ROOT_DIR"'/lib/rig/apply.sh"
+  rig_command_exists() { return 1; }
+  rig_brew_shellenv() {
+    rig_print_error "direct brew shellenv path"
+    return 1
+  }
+  rig_ensure_homebrew() {
+    rig_print_error "Homebrew is required but RIG_SKIP_HOMEBREW_INSTALL=yes"
+    return 1
+  }
+  rig_apply_tenv tenv:tf latest
+' >"$out" 2>&1
+assert_failure "$?" "tenv-only install requires Homebrew before apply"
+assert_contains "$out" "Homebrew is required but RIG_SKIP_HOMEBREW_INSTALL=yes" "tenv-only install uses Homebrew ensure path"
+assert_not_contains "$out" "direct brew shellenv path" "tenv-only install avoids direct shellenv path"
 
 id_prefixed_plan="$TEST_TMP/id-prefixed-install-plan.tsv"
 printf 'id\tstrategy\tpackage\tversion\tlabel\n' >"$id_prefixed_plan"
@@ -485,6 +514,26 @@ else
   fail "plain defaults prompt keeps stdout selection-only"
 fi
 assert_contains "$prompt_stderr" "Optional macOS preferences" "plain defaults prompt writes menu to stderr"
+
+prompt_stdout="$TEST_TMP/prompt-defaults-invalid.stdout"
+prompt_stderr="$TEST_TMP/prompt-defaults-invalid.stderr"
+PATH="$fake_darwin_bin:/usr/bin:/bin" RIG_ROOT="$ROOT_DIR" bash -c '
+  . "'"$ROOT_DIR"'/lib/rig/common.sh"
+  . "'"$ROOT_DIR"'/lib/rig/catalog.sh"
+  . "'"$ROOT_DIR"'/lib/rig/prompts.sh"
+  rig_validate_catalogs
+  printf "does-not-exist\n" | rig_prompt_defaults
+' >"$prompt_stdout" 2>"$prompt_stderr"
+assert_failure "$?" "plain defaults prompt rejects unknown ids"
+assert_contains "$prompt_stderr" "unknown macOS default id: does-not-exist" "plain defaults prompt reports unknown id"
+if [ ! -s "$prompt_stdout" ]; then
+  pass "plain defaults invalid id keeps stdout empty"
+else
+  printf '%s\n' "---- stdout ----"
+  cat "$prompt_stdout"
+  printf '%s\n' "----------------"
+  fail "plain defaults invalid id keeps stdout empty"
+fi
 
 bootstrap_git_bin="$TEST_TMP/bootstrap-git-bin"
 bootstrap_git_log="$TEST_TMP/bootstrap-git.log"
