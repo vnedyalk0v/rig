@@ -26,7 +26,8 @@ side-effect-free dry-run plans.
   packages through Homebrew Bundle, external install plans, and macOS defaults scripts.
   Homebrew is checked before tool selection; interactive installs ask before
   installing missing Homebrew, and non-interactive installs require `--yes`.
-  Use `--dry-run` to preview without changes.
+  Interactive installs show a final review before applying changes. Use
+  `--dry-run` to preview with a summary and raw plan without changes.
 - **Source of truth:** [`docs/rig-v1-spec.md`](docs/rig-v1-spec.md). Read it
   before any change. If a change conflicts with the spec, either align with the
   spec or update the spec in the same change — never let them drift.

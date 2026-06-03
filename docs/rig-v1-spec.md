@@ -183,7 +183,7 @@ Reproducibility is the core value of a bootstrap tool. A `Brewfile` is the de-fa
 
 ## Interactive and Non-Interactive Modes
 
-**Interactive (default):** The installer asks questions by category instead of presenting one huge list. Within each category the user can select **one, several, or all** items — selection is multi-select, never locked to a single tool per category. For example, under IDEs a user can pick both Visual Studio Code and Cursor; under browsers they can pick Chrome, Firefox, and Brave together. Versioned tools such as Node.js/npm, Bun, Terraform, OpenTofu, and Terragrunt ask a follow-up version question when the selected install strategy supports it. With `gum`, this maps to a multi-select (`gum choose --no-limit`) checklist; the plain-Bash fallback renders a keyboard checklist where Up/Down moves, Space toggles selection, and Enter continues.
+**Interactive (default):** The installer asks questions by category instead of presenting one huge list. Within each category the user can select **one, several, or all** items — selection is multi-select, never locked to a single tool per category. For example, under IDEs a user can pick both Visual Studio Code and Cursor; under browsers they can pick Chrome, Firefox, and Brave together. Versioned tools such as Node.js/npm, Bun, Terraform, OpenTofu, and Terragrunt ask a follow-up version question when the selected install strategy supports it. With `gum`, this maps to a multi-select (`gum choose --no-limit`) checklist; the plain-Bash fallback renders a keyboard checklist where Up/Down moves, Space toggles selection, and Enter continues. The fallback rows show the tool label, catalog id, and description without requiring numeric input.
 
 Example categories:
 
@@ -201,7 +201,7 @@ Example categories:
 - Fonts: JetBrains Mono, Fira Code, Hack Nerd Font.
 - macOS preferences: a few minimal, opt-in tweaks (see below).
 
-For prompt UI, `gum` is an optional dependency. Its project provides ready-to-use shell utilities for choices, confirmations, and input prompts. `rig` uses `gum` when available, and provides a plain Bash fallback so the installer still works on a clean Mac before anything is installed. The plain Bash fallback renders checkbox-style multi-select lists with keyboard navigation and does not require typing package numbers.
+For prompt UI, `gum` is an optional dependency. Its project provides ready-to-use shell utilities for choices, confirmations, and input prompts. `rig` uses `gum` when available in a real terminal, and provides a plain Bash fallback so the installer still works on a clean Mac before anything is installed. The plain Bash fallback renders checkbox-style multi-select lists with keyboard navigation and does not require typing package numbers. Interactive installs show a final review grouped by category before writing config or applying packages; actual installs require approval at that review step.
 
 Interactive selection requires a real terminal. If `rig install` or
 `rig install --dry-run` would need prompts but stdin is not a terminal, `rig`
@@ -219,7 +219,7 @@ In non-interactive mode there are no prompts; selections come from the chosen
 source. If Homebrew is missing and the command will actually install packages,
 the user must pass `--yes` to approve installing Homebrew.
 
-**Dry-run:** Dry-run is available for both interactive and non-interactive flows. It validates the requested selections, resolves package/install strategies, and prints the exact install plan, but it must not run installers or write generated state. This is the safe test path for demos, CI smoke checks, and verifying that the catalog and prompt logic work without changing the user's Mac.
+**Dry-run:** Dry-run is available for both interactive and non-interactive flows. It validates the requested selections, resolves package/install strategies, and prints the exact install plan, but it must not run installers or write generated state. Dry-run output starts with a short summary of counts, then prints the raw Brewfile, external install plan, macOS defaults, and shell/profile edit preview for auditability. This is the safe test path for demos, CI smoke checks, and verifying that the catalog and prompt logic work without changing the user's Mac.
 
 ## Catalog Design
 

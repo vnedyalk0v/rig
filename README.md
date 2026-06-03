@@ -27,7 +27,8 @@ Current implementation:
   `rig install --from-config` support preview, config-only, and replay flows.
 - `rig list`, `rig doctor`, `rig dry-run`, `rig self-update`, `rig update-tools`,
   and `rig version` are implemented.
-- Interactive install (no flags) uses optional `gum` with a plain Bash fallback.
+- Interactive install (no flags) uses optional `gum` with a plain Bash keyboard
+  checklist fallback and a final review screen.
 - Non-interactive selection uses `--select`, `--defaults`, `--category`, and
   `--version` flags.
 - TSV catalog validation, multi-select flags, macOS guards, and bootstrap checks
@@ -103,9 +104,15 @@ is missing.
 
 Interactive selection requires a real terminal. The plain Bash fallback renders
 checkbox-style multi-select lists by category: use Up/Down to move, Space to
-select or deselect, and Enter to continue. If `gum` is installed, `rig` uses its
-multi-select UI. In scripts, CI, or captured shells, pass explicit `--select`
-and `--defaults` flags instead of relying on prompts.
+select or deselect, and Enter to continue. Rows show the tool name, catalog id,
+and description without requiring numeric input. Before applying an interactive
+install, `rig` shows a final review grouped by category and asks for approval.
+If `gum` is installed, `rig` uses its multi-select UI. In scripts, CI, or
+captured shells, pass explicit `--select` and `--defaults` flags instead of
+relying on prompts.
+
+Dry-run output starts with a short summary of package counts before printing the
+raw Brewfile, external install plan, macOS defaults, and shell-edit preview.
 
 ## Local Validation
 

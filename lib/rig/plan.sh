@@ -701,6 +701,32 @@ rig_render_auto_update_preview() {
   printf 'Would run: brew autoupdate start --upgrade --cleanup --greedy\n\n'
 }
 
+rig_count_preview_lines() {
+  local value count line
+  value=$1
+  count=0
+  while IFS= read -r line || [ "$line" != "" ]; do
+    if [ "$line" = "" ]; then
+      continue
+    fi
+    count=$((count + 1))
+  done < <(printf '%s\n' "$value")
+  printf '%s\n' "$count"
+}
+
+rig_render_dry_run_summary() {
+  local brewfile_preview external_preview defaults_preview shell_edit_count
+  brewfile_preview=$1
+  external_preview=$2
+  defaults_preview=$3
+  shell_edit_count=$4
+  printf '# Summary\n'
+  printf 'Homebrew-native packages: %s\n' "$(rig_count_preview_lines "$brewfile_preview")"
+  printf 'External installers: %s\n' "$(rig_count_preview_lines "$external_preview")"
+  printf 'macOS defaults: %s\n' "$(rig_count_preview_lines "$defaults_preview")"
+  printf 'Shell/profile edits: %s\n\n' "$shell_edit_count"
+}
+
 rig_render_dry_run_from_config() {
   local brewfile plan_file defaults_script brewfile_preview external_preview defaults_preview
   local shell_edit_count profile_path login_shell line id strategy package version label
@@ -719,16 +745,10 @@ rig_render_dry_run_from_config() {
 
   rig_homebrew_preflight dry-run "$RIG_PLAN_YES" no || return 1
 
-  printf '# Brewfile preview\n'
+  brewfile_preview=
   if [ -f "$brewfile" ] && grep -v '^[[:space:]]*#' "$brewfile" | grep -v '^[[:space:]]*$' >/dev/null 2>&1; then
     brewfile_preview=$(grep -v '^[[:space:]]*#' "$brewfile" | grep -v '^[[:space:]]*$' || true)
-    printf '%s\n' "$brewfile_preview"
-  else
-    printf 'No Homebrew-native packages in saved config.\n'
   fi
-  printf '\n'
-
-  printf '# External install plan preview\n'
   external_preview=
   if [ -f "$plan_file" ]; then
     while IFS= read -r line || [ "$line" != "" ]; do
@@ -742,6 +762,23 @@ rig_render_dry_run_from_config() {
 "
     done <"$plan_file"
   fi
+  defaults_preview=
+  if [ -f "$defaults_script" ] && [ -s "$defaults_script" ]; then
+    defaults_preview=$(grep -v '^#!' "$defaults_script" | grep -v '^#' | grep -v '^[[:space:]]*$' | grep -v '^killall ' || true)
+  fi
+  shell_edit_count=$(rig_count_shell_edits_from_plan_file "$plan_file")
+
+  rig_render_dry_run_summary "$brewfile_preview" "$external_preview" "$defaults_preview" "$shell_edit_count"
+
+  printf '# Brewfile preview\n'
+  if [ "$brewfile_preview" != "" ]; then
+    printf '%s\n' "$brewfile_preview"
+  else
+    printf 'No Homebrew-native packages in saved config.\n'
+  fi
+  printf '\n'
+
+  printf '# External install plan preview\n'
   if [ "$external_preview" = "" ]; then
     printf 'No external installers in saved config.\n'
   else
@@ -750,10 +787,6 @@ rig_render_dry_run_from_config() {
   printf '\n'
 
   printf '# macOS defaults preview\n'
-  defaults_preview=
-  if [ -f "$defaults_script" ] && [ -s "$defaults_script" ]; then
-    defaults_preview=$(grep -v '^#!' "$defaults_script" | grep -v '^#' | grep -v '^[[:space:]]*$' | grep -v '^killall ' || true)
-  fi
   if [ "$defaults_preview" = "" ]; then
     printf 'No macOS defaults in saved config.\n'
   else
@@ -762,7 +795,6 @@ rig_render_dry_run_from_config() {
   printf '\n'
 
   printf '# Shell/profile edits preview\n'
-  shell_edit_count=$(rig_count_shell_edits_from_plan_file "$plan_file")
   if profile_path=$(rig_profile_path 2>/dev/null); then
     if [ "$shell_edit_count" -gt 0 ]; then
       printf 'Would add managed rig initialization block to %s.\n' "$profile_path"
@@ -792,8 +824,14 @@ rig_render_dry_run_plan_sections() {
   local shell_edit_count profile_path login_shell
   local brewfile_preview external_preview defaults_preview
 
-  printf '# Brewfile preview\n'
   brewfile_preview=$(rig_emit_brewfile_content "$RIG_PLAN_SELECTED_TOOLS")
+  external_preview=$(rig_emit_install_plan_preview "$RIG_PLAN_SELECTED_TOOLS" "$RIG_PLAN_VERSION_MAP")
+  defaults_preview=$(rig_emit_macos_defaults_preview "$RIG_PLAN_SELECTED_DEFAULTS")
+  shell_edit_count=$(rig_count_shell_edits_needed "$RIG_PLAN_SELECTED_TOOLS")
+
+  rig_render_dry_run_summary "$brewfile_preview" "$external_preview" "$defaults_preview" "$shell_edit_count"
+
+  printf '# Brewfile preview\n'
   if [ "$brewfile_preview" = "" ]; then
     printf 'No Homebrew-native packages selected.\n'
   else
@@ -802,7 +840,6 @@ rig_render_dry_run_plan_sections() {
   printf '\n'
 
   printf '# External install plan preview\n'
-  external_preview=$(rig_emit_install_plan_preview "$RIG_PLAN_SELECTED_TOOLS" "$RIG_PLAN_VERSION_MAP")
   if [ "$external_preview" = "" ]; then
     printf 'No external installers selected.\n'
   else
@@ -811,7 +848,6 @@ rig_render_dry_run_plan_sections() {
   printf '\n'
 
   printf '# macOS defaults preview\n'
-  defaults_preview=$(rig_emit_macos_defaults_preview "$RIG_PLAN_SELECTED_DEFAULTS")
   if [ "$defaults_preview" = "" ]; then
     printf 'No macOS defaults selected.\n'
   else
@@ -820,7 +856,6 @@ rig_render_dry_run_plan_sections() {
   printf '\n'
 
   printf '# Shell/profile edits preview\n'
-  shell_edit_count=$(rig_count_shell_edits_needed "$RIG_PLAN_SELECTED_TOOLS")
   if profile_path=$(rig_profile_path 2>/dev/null); then
     if [ "$shell_edit_count" -gt 0 ]; then
       printf 'Would add managed rig initialization block to %s.\n' "$profile_path"

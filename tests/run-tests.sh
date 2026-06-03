@@ -196,6 +196,11 @@ assert_contains "$out" "unknown category: does-not-exist" "unknown list category
 out="$TEST_TMP/dry-run.out"
 PATH="$fake_darwin_bin:$PATH" run_capture "$out" ./rig dry-run --select vscode,chrome,node-npm --defaults finder-show-hidden-files
 assert_success "$?" "rig dry-run succeeds"
+assert_contains "$out" "# Summary" "dry-run prints summary section"
+assert_contains "$out" "Homebrew-native packages: 2" "dry-run summary counts Homebrew-native packages"
+assert_contains "$out" "External installers: 1" "dry-run summary counts external installers"
+assert_contains "$out" "macOS defaults: 1" "dry-run summary counts macOS defaults"
+assert_contains "$out" "Shell/profile edits: 1" "dry-run summary counts shell edits"
 assert_contains "$out" "# Brewfile preview" "dry-run prints Brewfile section"
 assert_contains "$out" "cask \"visual-studio-code\"" "dry-run includes VS Code cask"
 assert_contains "$out" "cask \"google-chrome\"" "dry-run includes Chrome cask"
@@ -303,6 +308,7 @@ assert_contains "$out" "AI tools" "interactive dry-run includes AI category"
 assert_contains "$out" "JavaScript runtimes" "interactive dry-run includes runtime category"
 assert_contains "$out" "Infrastructure tools" "interactive dry-run includes infra category"
 assert_contains "$out" "Productivity and security" "interactive dry-run includes productivity category"
+assert_contains "$out" "Review selection" "interactive dry-run shows final review"
 
 out="$TEST_TMP/install-missing-homebrew-decline.out"
 decline_brew_home="$TEST_TMP/install-missing-homebrew-decline-home"
@@ -370,14 +376,21 @@ interactive_home="$TEST_TMP/interactive-home"
 mkdir -p "$interactive_home"
 # shellcheck disable=SC2016
 PATH="$fake_darwin_bin:$fake_brew_bin:/usr/bin:/bin" HOME="$interactive_home" RIG_CONFIG_DIR="$interactive_home/.config/rig" run_capture "$out" bash -c '
-  i=0
-  while [ "$i" -lt 40 ]; do
+  category_count=$(awk -F "\t" "NR>1 && !seen[\$1]++ { count++ } END { print count }" "'"$ROOT_DIR"'/catalog/tools.tsv")
+  {
+    i=0
+    while [ "$i" -lt "$category_count" ]; do
+      printf "\n"
+      i=$((i + 1))
+    done
     printf "\n"
-    i=$((i + 1))
-  done | RIG_ALLOW_NON_TTY_PROMPTS=yes ./rig install
+    printf "\n"
+    printf "y\n"
+  } | RIG_ALLOW_NON_TTY_PROMPTS=yes ./rig install
 '
 assert_success "$?" "rig install interactive default path succeeds with no selections"
 assert_contains "$out" "Wrote rig config" "interactive install writes config"
+assert_contains "$out" "Review selection" "interactive install shows final review"
 assert_success "$([ -f "$interactive_home/.config/rig/Brewfile" ] && echo 0 || echo 1)" "interactive install creates Brewfile"
 
 out="$TEST_TMP/install-dry-run-non-macos.out"
@@ -577,6 +590,7 @@ PATH="$fake_darwin_bin:$PATH" RIG_ROOT="$ROOT_DIR" bash -c '
   rig_prompt_tools_for_category() { printf "vscode\n"; }
   rig_prompt_defaults() { return 0; }
   rig_prompt_auto_update() { printf "no\n"; }
+  rig_prompt_review_selection() { return 0; }
   rig_validate_catalogs
   RIG_ALLOW_NON_TTY_PROMPTS=yes
   rig_run_interactive_selection
@@ -585,6 +599,37 @@ PATH="$fake_darwin_bin:$PATH" RIG_ROOT="$ROOT_DIR" bash -c '
 assert_success "$?" "interactive selection stub succeeds"
 assert_contains "$out" "tools:vscode" "interactive selection stub selects vscode"
 
+prompt_stdout="$TEST_TMP/review-selection.stdout"
+prompt_stderr="$TEST_TMP/review-selection.stderr"
+PATH="$fake_darwin_bin:/usr/bin:/bin" RIG_ROOT="$ROOT_DIR" bash -c '
+  . "'"$ROOT_DIR"'/lib/rig/common.sh"
+  . "'"$ROOT_DIR"'/lib/rig/catalog.sh"
+  . "'"$ROOT_DIR"'/lib/rig/prompts.sh"
+  rig_validate_catalogs
+  RIG_PLAN_SELECTED_TOOLS=$(printf "vscode\nfirefox\nnode-npm\n")
+  RIG_PLAN_SELECTED_DEFAULTS=$(printf "finder-show-hidden-files\n")
+  RIG_PLAN_AUTO_UPDATE=yes
+  RIG_PLAN_DRY_RUN=no
+  printf "y\n" | rig_prompt_review_selection
+' >"$prompt_stdout" 2>"$prompt_stderr"
+assert_success "$?" "review prompt accepts confirmation"
+if [ ! -s "$prompt_stdout" ]; then
+  pass "review prompt keeps stdout empty"
+else
+  printf '%s\n' "---- stdout ----"
+  cat "$prompt_stdout"
+  printf '%s\n' "----------------"
+  fail "review prompt keeps stdout empty"
+fi
+assert_contains "$prompt_stderr" "Review selection" "review prompt prints heading"
+assert_contains "$prompt_stderr" "IDEs and editors: Visual Studio Code" "review prompt groups IDE tools"
+assert_contains "$prompt_stderr" "Browsers: Firefox" "review prompt groups browser tools"
+assert_contains "$prompt_stderr" "JavaScript runtimes: Node.js/npm" "review prompt groups runtime tools"
+assert_contains "$prompt_stderr" "macOS preferences" "review prompt prints defaults section"
+assert_contains "$prompt_stderr" "Show hidden files" "review prompt shows selected default labels"
+assert_contains "$prompt_stderr" "Homebrew auto-update: yes" "review prompt shows auto-update selection"
+assert_contains "$prompt_stderr" "Continue with install?" "review prompt asks before install"
+
 prompt_stdout="$TEST_TMP/prompt-tools.stdout"
 prompt_stderr="$TEST_TMP/prompt-tools.stderr"
 PATH="$fake_darwin_bin:/usr/bin:/bin" RIG_ROOT="$ROOT_DIR" bash -c '
@@ -592,6 +637,8 @@ PATH="$fake_darwin_bin:/usr/bin:/bin" RIG_ROOT="$ROOT_DIR" bash -c '
   . "'"$ROOT_DIR"'/lib/rig/catalog.sh"
   . "'"$ROOT_DIR"'/lib/rig/prompts.sh"
   rig_validate_catalogs
+  RIG_PROMPT_STEP=1
+  RIG_PROMPT_TOTAL=8
   printf "\n" | rig_prompt_tools_for_category ide
 ' >"$prompt_stdout" 2>"$prompt_stderr"
 assert_success "$?" "plain tool prompt succeeds with blank selection"
@@ -603,10 +650,12 @@ else
   printf '%s\n' "----------------"
   fail "plain tool prompt keeps stdout selection-only"
 fi
-assert_contains "$prompt_stderr" "rig setup" "plain tool prompt writes setup header to stderr"
+assert_contains "$prompt_stderr" "rig setup | 1/8 IDEs and editors | selected 0" "plain tool prompt writes progress header to stderr"
 assert_contains "$prompt_stderr" "IDEs and editors" "plain tool prompt writes category heading to stderr"
-assert_contains "$prompt_stderr" "> [ ] 1  Visual Studio Code" "plain tool prompt renders active checkbox row"
-assert_contains "$prompt_stderr" "Use Up/Down to move" "plain tool prompt explains keyboard selection"
+assert_contains "$prompt_stderr" "> [ ] Visual Studio Code" "plain tool prompt renders active checkbox row without numbers"
+assert_contains "$prompt_stderr" "vscode" "plain tool prompt shows catalog id"
+assert_contains "$prompt_stderr" "Up/Down move  Space toggle  Enter continue" "plain tool prompt explains compact keyboard footer"
+assert_not_contains "$prompt_stderr" "> [ ] 1  Visual Studio Code" "plain tool prompt hides numeric choices"
 assert_not_contains "$prompt_stderr" "Category: ide" "plain tool prompt does not use raw category dump"
 
 prompt_stdout="$TEST_TMP/prompt-tools-space.stdout"
@@ -639,6 +688,7 @@ PATH="$fake_darwin_bin:/usr/bin:/bin" RIG_ROOT="$ROOT_DIR" bash -c '
   printf "\033[B \n" | rig_prompt_tools_for_category browser
 ' >"$prompt_stdout" 2>"$prompt_stderr"
 assert_success "$?" "plain tool prompt moves with down arrow"
+assert_contains "$prompt_stderr" "selected 1" "plain tool prompt updates selected count after toggling"
 prompt_value=$(cat "$prompt_stdout")
 if [ "$prompt_value" = "firefox" ]; then
   pass "plain tool prompt emits arrow-selected row id"
@@ -689,7 +739,8 @@ else
   fail "plain defaults prompt keeps stdout selection-only"
 fi
 assert_contains "$prompt_stderr" "macOS preferences" "plain defaults prompt writes heading to stderr"
-assert_contains "$prompt_stderr" "> [ ] finder-show-hidden-files" "plain defaults prompt renders active checkbox row"
+assert_contains "$prompt_stderr" "> [ ] Show hidden files" "plain defaults prompt renders active checkbox row with label"
+assert_contains "$prompt_stderr" "finder-show-hidden-files" "plain defaults prompt shows default id"
 assert_contains "$prompt_stderr" "Show hidden files in Finder" "plain defaults prompt includes default descriptions"
 
 prompt_stdout="$TEST_TMP/prompt-defaults-space.stdout"
@@ -737,15 +788,22 @@ rm -f "$bootstrap_git_log"
 out="$TEST_TMP/bootstrap-success.out"
 # shellcheck disable=SC2016
 HOME="$bootstrap_success_home" PATH="$fake_darwin_bin:$bootstrap_git_bin:$fake_brew_bin:/usr/bin:/bin" RIG_LOGIN_SHELL=/bin/zsh run_capture "$out" bash -c '
-  i=0
-  while [ "$i" -lt 40 ]; do
+  category_count=$(awk -F "\t" "NR>1 && !seen[\$1]++ { count++ } END { print count }" "'"$ROOT_DIR"'/catalog/tools.tsv")
+  {
+    i=0
+    while [ "$i" -lt "$category_count" ]; do
+      printf "\n"
+      i=$((i + 1))
+    done
     printf "\n"
-    i=$((i + 1))
-  done | RIG_ALLOW_NON_TTY_PROMPTS=yes ./install.sh
+    printf "\n"
+    printf "y\n"
+  } | RIG_ALLOW_NON_TTY_PROMPTS=yes ./install.sh
 '
 assert_success "$?" "install.sh bootstrap succeeds with fake git"
 assert_contains "$out" "rig command installed at" "bootstrap success reports installed command"
 assert_contains "$out" "Starting rig install" "bootstrap starts rig install"
+assert_contains "$out" "Review selection" "bootstrap install flow shows final review"
 assert_contains "$out" "Wrote rig config" "bootstrap install flow writes config"
 assert_success "$([ -L "$bootstrap_success_home/.local/bin/rig" ] && echo 0 || echo 1)" "bootstrap creates rig symlink"
 assert_contains "$bootstrap_git_log" "clone" "bootstrap invokes git clone"

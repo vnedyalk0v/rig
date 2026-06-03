@@ -4,7 +4,7 @@ rig_prompt_yes_no() {
   local prompt default reply
   prompt=$1
   default=${2:-no}
-  if rig_command_exists gum; then
+  if rig_prompt_use_gum; then
     case "$default" in
       yes)
         gum confirm "$prompt" --default=true
@@ -16,7 +16,11 @@ rig_prompt_yes_no() {
         ;;
     esac
   fi
-  printf '%s [y/N]: ' "$prompt" >&2
+  if [ "$default" = "yes" ]; then
+    printf '%s [Y/n]: ' "$prompt" >&2
+  else
+    printf '%s [y/N]: ' "$prompt" >&2
+  fi
   IFS= read -r reply
   rig_prompt_finish_input_line
   case "$reply" in
@@ -30,6 +34,10 @@ rig_prompt_yes_no() {
       return 1
       ;;
   esac
+}
+
+rig_prompt_use_gum() {
+  rig_command_exists gum && [ -t 0 ]
 }
 
 rig_prompt_finish_input_line() {
@@ -76,6 +84,42 @@ rig_prompt_screen_clear() {
   fi
 }
 
+rig_prompt_color_enabled() {
+  if [ ! -t 2 ]; then
+    return 1
+  fi
+  if [ "${NO_COLOR:-}" != "" ]; then
+    return 1
+  fi
+  if [ "${TERM:-}" = "dumb" ]; then
+    return 1
+  fi
+  return 0
+}
+
+rig_prompt_style() {
+  local code value
+  code=$1
+  value=$2
+  if rig_prompt_color_enabled; then
+    printf '\033[%sm%s\033[0m' "$code" "$value"
+  else
+    printf '%s' "$value"
+  fi
+}
+
+rig_prompt_dim() {
+  rig_prompt_style 2 "$1"
+}
+
+rig_prompt_bold() {
+  rig_prompt_style 1 "$1"
+}
+
+rig_prompt_green() {
+  rig_prompt_style 32 "$1"
+}
+
 rig_count_lines() {
   local value count line
   value=$1
@@ -90,22 +134,23 @@ rig_count_lines() {
 }
 
 rig_prompt_header() {
-  local title selected_count
+  local title selected_count header
   title=$1
   selected_count=${RIG_PROMPT_SELECTED_COUNT:-0}
   rig_prompt_screen_clear
-  printf 'rig setup' >&2
+  header='rig setup'
   if [ "${RIG_PLAN_DRY_RUN:-no}" = "yes" ]; then
-    printf ' dry-run' >&2
+    header="${header} dry-run"
   fi
-  if [ "${RIG_PROMPT_STEP:-}" != "" ]; then
-    printf '  |  category %s' "$RIG_PROMPT_STEP" >&2
+  if [ "${RIG_PROMPT_STEP:-}" != "" ] && [ "${RIG_PROMPT_TOTAL:-}" != "" ]; then
+    header="${header} | ${RIG_PROMPT_STEP}/${RIG_PROMPT_TOTAL} ${title}"
+  elif [ "${RIG_PROMPT_STEP:-}" != "" ]; then
+    header="${header} | category ${RIG_PROMPT_STEP} ${title}"
+  else
+    header="${header} | ${title}"
   fi
-  printf '\n' >&2
-  printf '%s\n' "$title" >&2
-  if [ "$selected_count" -gt 0 ]; then
-    printf 'Selected so far: %s\n' "$selected_count" >&2
-  fi
+  header="${header} | selected ${selected_count}"
+  printf '%s\n' "$(rig_prompt_bold "$header")" >&2
   printf '\n' >&2
 }
 
@@ -222,7 +267,7 @@ rig_prompt_print_selected_items() {
 }
 
 rig_prompt_render_multi_select_rows() {
-  local items selected cursor row_mode index item_id item_label item_description pointer mark
+  local items selected cursor row_mode index item_id item_label item_description pointer mark line description
   items=$1
   selected=$2
   cursor=$3
@@ -238,16 +283,24 @@ rig_prompt_render_multi_select_rows() {
     fi
     mark=' '
     if rig_prompt_selection_contains "$selected" "$item_id"; then
-      mark=x
+      mark=$(rig_prompt_green x)
+    fi
+    description=$item_description
+    if [ "$index" -ne "$cursor" ]; then
+      description=$(rig_prompt_dim "$item_description")
     fi
     case "$row_mode" in
       defaults)
-        printf '%s [%s] %-28s %s\n' "$pointer" "$mark" "$item_id" "$item_description" >&2
+        line=$(printf '%s [%s] %-24s %-30s %s' "$pointer" "$mark" "$item_label" "$item_id" "$description")
         ;;
       *)
-        printf '%s [%s] %-2s %-24s %s\n' "$pointer" "$mark" "$index" "$item_label" "$item_description" >&2
+        line=$(printf '%s [%s] %-24s %-16s %s' "$pointer" "$mark" "$item_label" "$item_id" "$description")
         ;;
     esac
+    if [ "$index" -eq "$cursor" ]; then
+      line=$(rig_prompt_bold "$line")
+    fi
+    printf '%s\n' "$line" >&2
     index=$((index + 1))
   done < <(printf '%s\n' "$items")
 }
@@ -283,7 +336,7 @@ rig_prompt_read_key() {
 }
 
 rig_prompt_multi_select() {
-  local title items row_mode item_count cursor selected key current_id
+  local title items row_mode item_count cursor selected key current_id base_selected_count current_selected_count
   title=$1
   items=$2
   row_mode=$3
@@ -293,14 +346,23 @@ rig_prompt_multi_select() {
   fi
 
   cursor=1
+  base_selected_count=${RIG_PROMPT_SELECTED_COUNT:-0}
   selected='
 '
   while :; do
+    current_selected_count=$(rig_count_lines "$selected")
+    RIG_PROMPT_SELECTED_COUNT=$((base_selected_count + current_selected_count))
     rig_prompt_header "$title"
-    printf 'Use Up/Down to move, Space to select/deselect, Enter to continue.\n' >&2
-    printf 'Press a to select all, n to clear, q to skip this category.\n\n' >&2
+    case "$row_mode" in
+      defaults)
+        printf 'Choose macOS preferences.\n\n' >&2
+        ;;
+      *)
+        printf 'Choose tools for this category.\n\n' >&2
+        ;;
+    esac
     rig_prompt_render_multi_select_rows "$items" "$selected" "$cursor" "$row_mode"
-    printf '\n' >&2
+    printf '\nUp/Down move  Space toggle  Enter continue  a all  n clear  q skip\n' >&2
 
     if ! rig_prompt_read_key; then
       break
@@ -366,7 +428,7 @@ rig_prompt_tools_for_category() {
     return 0
   fi
 
-  if rig_command_exists gum; then
+  if rig_prompt_use_gum; then
     choice=$(printf '%s\n' "$items" | while IFS='|' read -r tool_id tool_label tool_description; do
       if [ "$tool_id" = "" ]; then
         continue
@@ -389,7 +451,7 @@ rig_prompt_version() {
   versions_csv=$2
   versions=$(printf '%s' "$versions_csv" | tr ',' '
 ')
-  if rig_command_exists gum; then
+  if rig_prompt_use_gum; then
     choice=$(printf '%s\n' "$versions" | gum choose --header "Version for $tool_id" || true)
     if [ "$choice" != "" ]; then
       if ! rig_validate_tool_version "$tool_id" "$choice"; then
@@ -425,7 +487,7 @@ rig_prompt_defaults() {
     items="${items}${id}|${label}|${description}
 "
   done < <(rig_each_default)
-  if rig_command_exists gum; then
+  if rig_prompt_use_gum; then
     selected=$(printf '%s\n' "$items" | while IFS='|' read -r default_id default_label default_description; do
       if [ "$default_id" = "" ]; then
         continue
@@ -440,6 +502,86 @@ rig_prompt_defaults() {
   fi
 
   rig_prompt_multi_select "macOS preferences" "$items" defaults
+}
+
+rig_prompt_append_label() {
+  local current label
+  current=$1
+  label=$2
+  if [ "$current" = "" ]; then
+    printf '%s' "$label"
+  else
+    printf '%s, %s' "$current" "$label"
+  fi
+}
+
+rig_prompt_print_review_tools() {
+  local selected_tools category labels selected_id row row_category _id label _kind _package _default_flag _description _version_strategy _versions _notes printed category_label
+  selected_tools=$1
+  printed=no
+  printf 'Tools\n' >&2
+  while IFS= read -r category || [ "$category" != "" ]; do
+    if [ "$category" = "" ]; then
+      continue
+    fi
+    labels=
+    while IFS= read -r selected_id || [ "$selected_id" != "" ]; do
+      if [ "$selected_id" = "" ]; then
+        continue
+      fi
+      row=$(rig_lookup_tool "$selected_id")
+      IFS="$RIG_TSV_DELIMITER" read -r row_category _id label _kind _package _default_flag _description _version_strategy _versions _notes < <(printf '%s\n' "$row")
+      if [ "$row_category" = "$category" ]; then
+        labels=$(rig_prompt_append_label "$labels" "$label")
+      fi
+    done < <(printf '%s\n' "$selected_tools")
+    if [ "$labels" != "" ]; then
+      category_label=$(rig_category_label "$category")
+      printf '  %s: %s\n' "$category_label" "$labels" >&2
+      printed=yes
+    fi
+  done < <(rig_each_category)
+  if [ "$printed" = "no" ]; then
+    printf '  No tools selected.\n' >&2
+  fi
+  printf '\n' >&2
+}
+
+rig_prompt_print_review_defaults() {
+  local selected_defaults selected_id row _id label _description _command _restart printed
+  selected_defaults=$1
+  printed=no
+  printf 'macOS preferences\n' >&2
+  while IFS= read -r selected_id || [ "$selected_id" != "" ]; do
+    if [ "$selected_id" = "" ]; then
+      continue
+    fi
+    row=$(rig_lookup_default "$selected_id")
+    IFS="$RIG_TSV_DELIMITER" read -r _id label _description _command _restart < <(printf '%s\n' "$row")
+    printf '  %s\n' "$label" >&2
+    printed=yes
+  done < <(printf '%s\n' "$selected_defaults")
+  if [ "$printed" = "no" ]; then
+    printf '  No macOS preferences selected.\n' >&2
+  fi
+  printf '\n' >&2
+}
+
+rig_prompt_review_selection() {
+  rig_prompt_screen_clear
+  printf '%s\n\n' "$(rig_prompt_bold "Review selection")" >&2
+  rig_prompt_print_review_tools "$RIG_PLAN_SELECTED_TOOLS"
+  rig_prompt_print_review_defaults "$RIG_PLAN_SELECTED_DEFAULTS"
+  printf 'Homebrew auto-update: %s\n\n' "$RIG_PLAN_AUTO_UPDATE" >&2
+  if [ "${RIG_PLAN_DRY_RUN:-no}" = "yes" ]; then
+    rig_prompt_yes_no "Continue to dry-run preview?" yes
+    return $?
+  fi
+  if rig_prompt_yes_no "Continue with install?" no; then
+    return 0
+  fi
+  rig_print_error "setup cancelled"
+  return 1
 }
 
 rig_prompt_auto_update() {
@@ -465,7 +607,7 @@ rig_each_category() {
 }
 
 rig_run_interactive_selection() {
-  local category selected_tools selected_defaults version_map tool_id row version _versions category_index
+  local category selected_tools selected_defaults version_map tool_id row version _versions category_index category_total
   local _category _id _label _kind _package _default_flag _description _version_strategy _notes auto_update
   RIG_PLAN_SELECTED_TOOLS=
   RIG_PLAN_SELECTED_DEFAULTS=
@@ -474,6 +616,8 @@ rig_run_interactive_selection() {
   selected_tools=
   version_map=
   category_index=0
+  category_total=$(rig_count_lines "$(rig_each_category)")
+  RIG_PROMPT_TOTAL=$category_total
   while IFS= read -r category <&4 || [ "$category" != "" ]; do
     if [ "$category" = "" ]; then
       continue
@@ -501,6 +645,7 @@ rig_run_interactive_selection() {
   done 4< <(rig_each_category)
 
   RIG_PROMPT_STEP=
+  RIG_PROMPT_TOTAL=
   RIG_PROMPT_SELECTED_COUNT=$(rig_count_lines "$selected_tools")
   selected_defaults=$(rig_prompt_defaults)
   RIG_PROMPT_STEP=
@@ -518,4 +663,5 @@ rig_run_interactive_selection() {
     # shellcheck disable=SC2034
     RIG_PLAN_AUTO_UPDATE=yes
   fi
+  rig_prompt_review_selection || return 1
 }
