@@ -165,7 +165,7 @@ rig_prompt_version() {
 }
 
 rig_prompt_defaults() {
-  local items selected
+  local items selected default_id
   items=
   while IFS="$RIG_TSV_DELIMITER" read -r id label description _command _restart; do
     items="${items}${id}|${label}|${description}
@@ -197,7 +197,16 @@ rig_prompt_defaults() {
   if [ "$selected" = "" ]; then
     return 0
   fi
-  rig_join_csv_as_lines "$selected"
+  while IFS= read -r default_id || [ "$default_id" != "" ]; do
+    if [ "$default_id" = "" ]; then
+      continue
+    fi
+    if ! rig_default_exists "$default_id"; then
+      rig_print_error "unknown macOS default id: $default_id"
+      return 1
+    fi
+    printf '%s\n' "$default_id"
+  done < <(rig_join_csv_as_lines "$selected")
 }
 
 rig_prompt_auto_update() {

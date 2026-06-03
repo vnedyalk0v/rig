@@ -35,9 +35,9 @@ rig_require_macos() {
 }
 
 rig_usage() {
+  printf 'Usage:\n'
+  printf '  %s\n' "${RIG_INSTALL_USAGE#Usage: }"
   cat <<'EOF'
-Usage:
-  rig install [--dry-run] [--write-config-only] [--from-config] [--select <ids>] [--defaults <ids>] [--category <id>] [--version <id=version>] [--brewfile <path>] [--install-plan <path>] [--auto-update]
   rig dry-run [--select <ids>] [--defaults <ids>] [--category <id>] [--version <id=version>]
   rig list [--category <id>]
   rig doctor
