@@ -117,3 +117,59 @@ jobs:
           ./rig install --from-config
           brew bundle check --file="$RIG_CONFIG_DIR/Brewfile"
           gh --version
+
+  external-installer-smoke:
+    name: Apple Silicon external installer smoke
+    needs: dry-run-smoke
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+      RIG_SKIP_HOMEBREW_INSTALL: "yes"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+
+      - name: Verify Apple Silicon runner
+        run: |
+          test "$(uname -s)" = "Darwin"
+          test "$(uname -m)" = "arm64"
+          sw_vers
+          /bin/bash --version | head -n 1
+
+      - name: Run nvm install smoke
+        run: |
+          export HOME="$RUNNER_TEMP/rig-external-home"
+          export RIG_CONFIG_DIR="$HOME/.config/rig"
+          export NVM_DIR="$HOME/.nvm"
+          export RIG_LOGIN_SHELL=/bin/bash
+          mkdir -p "$HOME"
+
+          ./rig install --write-config-only --select node-npm=lts
+          grep -F $'node-npm\tnvm\tnvm\tlts\tNode.js/npm' "$RIG_CONFIG_DIR/install-plan.tsv"
+
+          ./rig install --from-config
+          test -s "$NVM_DIR/nvm.sh"
+          test -f "$HOME/.bash_profile"
+          grep -F '# >>> rig managed >>>' "$HOME/.bash_profile"
+          grep -F 'NVM_DIR' "$HOME/.bash_profile"
+
+          # shellcheck disable=SC1091
+          . "$NVM_DIR/nvm.sh"
+          nvm current
+          node --version
+          npm --version
+
+          node_path=$(command -v node)
+          npm_path=$(command -v npm)
+          case "$node_path" in
+            "$NVM_DIR"/*) ;;
+            *) printf 'node resolved outside nvm: %s\n' "$node_path" >&2; exit 1 ;;
+          esac
+          case "$npm_path" in
+            "$NVM_DIR"/*) ;;
+            *) printf 'npm resolved outside nvm: %s\n' "$npm_path" >&2; exit 1 ;;
+          esac

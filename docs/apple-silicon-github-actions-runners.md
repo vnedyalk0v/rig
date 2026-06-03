@@ -57,7 +57,8 @@ clean retail machine.
 
 ## Recommended CI Shape
 
-Use three layers instead of making every pull request perform a heavy install.
+Use layered checks instead of pretending one smoke test proves every install
+strategy.
 
 ### 1. Required Apple Silicon Dry-Run Smoke
 
@@ -120,7 +121,7 @@ behavior.
 Required CI intentionally uses dry-run product commands only. It does not run
 real `brew bundle` installs or replay external installers.
 
-### 2. Automatic Apple Silicon Install Smoke
+### 2. Automatic Apple Silicon Formula Install Smoke
 
 Implemented as the `Apple Silicon install smoke` job in
 `.github/workflows/apple-silicon-smoke.yml`. It runs after the dry-run smoke on
@@ -166,34 +167,66 @@ The implemented install smoke uses only the `gh` formula selection. It does not
 install GUI casks, Mac App Store apps, external installers, or Homebrew
 auto-update state.
 
-### 3. Manual External Installer Smoke
+### 3. Automatic Apple Silicon External Installer Smoke
 
-Deferred for a future manual workflow. Run only on demand.
+Implemented as the `Apple Silicon external installer smoke` job in
+`.github/workflows/apple-silicon-smoke.yml`. It runs automatically on the same
+pull request, push, schedule, and explicit rerun triggers as the other Apple
+Silicon jobs.
 
 Purpose:
 
-- verify one external installer path at a time, such as Bun, nvm, or tenv;
-- keep network/vendor flakiness out of required PR checks;
-- preserve reviewability for installer behavior.
+- prove a real non-Homebrew installer path through `install-plan.tsv`;
+- verify `rig install --from-config` replays that plan in a temporary `HOME`;
+- prove the resulting tool binaries are actually available after installation;
+- verify shell profile initialization is written for version-manager tools.
 
-Suggested examples:
+The current external smoke uses the nvm-backed Node.js/npm path because it is a
+core v1 behavior and avoids GUI casks, App Store authentication, and background
+Homebrew auto-update state:
 
-- Bun path: `./rig install --write-config-only --select bun`, then
-  `./rig install --from-config`, then verify `$HOME/.bun/bin/bun --version`.
-- Node path: `./rig install --write-config-only --select node-npm=lts`, then
-  verify nvm created a usable Node installation.
+```bash
+export HOME="$RUNNER_TEMP/rig-external-home"
+export RIG_CONFIG_DIR="$HOME/.config/rig"
+export NVM_DIR="$HOME/.nvm"
+export RIG_LOGIN_SHELL=/bin/bash
+mkdir -p "$HOME"
+
+./rig install --write-config-only --select node-npm=lts
+grep -F $'node-npm\tnvm\tnvm\tlts\tNode.js/npm' "$RIG_CONFIG_DIR/install-plan.tsv"
+
+./rig install --from-config
+test -s "$NVM_DIR/nvm.sh"
+test -f "$HOME/.bash_profile"
+grep -F '# >>> rig managed >>>' "$HOME/.bash_profile"
+grep -F 'NVM_DIR' "$HOME/.bash_profile"
+
+. "$NVM_DIR/nvm.sh"
+nvm current
+node --version
+npm --version
+```
+
+This still does not prove every external installer. Add one focused scheduled
+or required job per installer strategy only when the catalog and implementation
+have enough stable behavior to justify the extra runtime and network surface.
+Good future candidates are:
+
+- Bun path: `./rig install --write-config-only --select bun`, then verify
+  `$HOME/.bun/bin/bun --version`.
 - tenv path: test one of `terraform`, `opentofu`, or `terragrunt`, not all
-  three in the same required workflow.
+  three in the same job.
 
 Do not test `--auto-update` with real Homebrew auto-update in GitHub-hosted CI.
 It can create launchd/background state and is not useful enough for a required
-runner check. Keep auto-update coverage mocked or manual.
+runner check. Keep auto-update coverage mocked.
 
 ## Implemented Workflows
 
-- `.github/workflows/apple-silicon-smoke.yml` runs both `Apple Silicon dry-run
-  smoke` and `Apple Silicon install smoke` on `macos-15` for pull requests,
-  pushes, the weekly schedule, and explicit reruns.
+- `.github/workflows/apple-silicon-smoke.yml` runs `Apple Silicon dry-run
+  smoke`, `Apple Silicon install smoke`, and `Apple Silicon external installer
+  smoke` on `macos-15` for pull requests, pushes, the weekly schedule, and
+  explicit reruns.
 
 The workflow uses a pinned `actions/checkout` commit, sets
 `persist-credentials: false`, and keeps `permissions: contents: read`.
@@ -203,6 +236,7 @@ rulesets should require these job names:
 
 - `Apple Silicon dry-run smoke`
 - `Apple Silicon install smoke`
+- `Apple Silicon external installer smoke`
 
 ## Operational Guardrails
 
