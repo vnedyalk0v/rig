@@ -114,13 +114,17 @@ for f in install.sh rig lib/rig/*.sh scripts/*.sh tests/*.sh; do
 done
 bash tests/run-tests.sh
 ./scripts/validate-catalog.sh
-./rig install --dry-run --select vscode,chrome,node-npm --defaults finder-show-hidden-files
+RIG_SKIP_HOMEBREW_INSTALL=yes ./rig install --dry-run --select vscode,chrome,node-npm --defaults finder-show-hidden-files
 ./install.sh --dry-run
 test ! -e "$RIG_CONFIG_DIR"
 test ! -e "$HOME/.local/share/rig"
 test ! -e "$HOME/.local/bin/rig"
 git diff --check
 ```
+
+Scope `RIG_SKIP_HOMEBREW_INSTALL=yes` to the dry-run command only. Do not
+export it for the whole job because the regression suite exercises the fake
+Homebrew installer path.
 
 If `shellcheck` or `actionlint` is not already present on the runner, install
 only those validation tools through Homebrew after the product install phase,
@@ -138,7 +142,6 @@ export NVM_DIR="$HOME/.nvm"
 export RIG_LOGIN_SHELL=/bin/bash
 export HOMEBREW_NO_AUTO_UPDATE=1
 export HOMEBREW_NO_INSTALL_CLEANUP=1
-export RIG_SKIP_HOMEBREW_INSTALL=yes
 mkdir -p "$HOME"
 
 brew uninstall --formula --ignore-dependencies gh || true
