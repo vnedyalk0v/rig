@@ -59,7 +59,7 @@ jobs:
           done
           bash tests/run-tests.sh
           ./scripts/validate-catalog.sh
-          ./rig dry-run --select vscode,chrome,node-npm --defaults finder-show-hidden-files 2>"$RUNNER_TEMP/rig-dry-run.stderr"
+          ./rig install --dry-run --select vscode,chrome,node-npm --defaults finder-show-hidden-files 2>"$RUNNER_TEMP/rig-dry-run.stderr"
           assert_empty_stderr "$RUNNER_TEMP/rig-dry-run.stderr"
           ./install.sh --dry-run 2>"$RUNNER_TEMP/install-dry-run.stderr"
           assert_empty_stderr "$RUNNER_TEMP/install-dry-run.stderr"

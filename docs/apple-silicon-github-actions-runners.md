@@ -69,7 +69,8 @@ for explicit reruns.
 Purpose:
 
 - prove the shell runs on real macOS arm64;
-- prove dry-run stays side-effect free;
+- prove install-mode dry-run stays side-effect free while exercising the
+  Homebrew prerequisite preview;
 - run the existing local validation surface, including regression tests that
   cover temporary-home config generation;
 - prove `rig install --write-config-only` creates real config in a temp home;
@@ -113,7 +114,7 @@ for f in install.sh rig lib/rig/*.sh scripts/*.sh tests/*.sh; do
 done
 bash tests/run-tests.sh
 ./scripts/validate-catalog.sh
-./rig dry-run --select vscode,chrome,node-npm --defaults finder-show-hidden-files
+./rig install --dry-run --select vscode,chrome,node-npm --defaults finder-show-hidden-files
 ./install.sh --dry-run
 test ! -e "$RIG_CONFIG_DIR"
 test ! -e "$HOME/.local/share/rig"
@@ -190,6 +191,12 @@ runner check. Keep auto-update coverage mocked.
 
 The workflow uses a pinned `actions/checkout` commit, sets
 `persist-credentials: false`, and keeps `permissions: contents: read`.
+
+The required dry-run phase uses `rig install --dry-run` instead of only
+`rig dry-run` so it covers the Homebrew prerequisite preview that a real install
+would reach before package selection. The real install phase relies on the
+runner's existing Homebrew installation; missing-Homebrew approval is covered by
+the shell regression suite with a mocked Homebrew prefix.
 
 After the workflow lands on `dev` and the job has reported at least once, the
 rulesets should require this job name:

@@ -17,19 +17,22 @@ so safety is not optional. Prioritize in this order:
 ## Project Overview
 
 `rig` is a small macOS-only DevOps bootstrap tool ("rig up your Mac"). A
-one-command `install.sh` entrypoint verifies macOS and installs/updates the
-local `rig` command. The current MVP validates the TSV catalog, lists tools,
-runs diagnostics, and renders side-effect-free dry-run plans.
+one-command `install.sh` entrypoint verifies macOS, installs/updates the local
+`rig` command, and starts the Homebrew-first install flow. The current MVP
+validates the TSV catalog, lists tools, runs diagnostics, and renders
+side-effect-free dry-run plans.
 
 - **Status:** Pre-release v1. The installer and `rig` command install workstation
   packages through Homebrew Bundle, external install plans, and macOS defaults scripts.
+  Homebrew is checked before tool selection; interactive installs ask before
+  installing missing Homebrew, and non-interactive installs require `--yes`.
   Use `--dry-run` to preview without changes.
 - **Source of truth:** [`docs/rig-v1-spec.md`](docs/rig-v1-spec.md). Read it
   before any change. If a change conflicts with the spec, either align with the
   spec or update the spec in the same change — never let them drift.
 - **Runtime:** `#!/bin/bash`, **Bash 3.2-compatible**, runs on a clean
   Mac with zero installs. `gum` is an optional UI enhancement with a plain-Bash
-  fallback.
+  keyboard checklist fallback.
 - **Install engine:** Homebrew + Homebrew Bundle. Version managers (`nvm`,
   `tenv`, Bun installer) only when Homebrew cannot give the required version.
 - **State:** committable `Brewfile`, external install plan, and
@@ -75,7 +78,7 @@ bash tests/run-tests.sh
 shellcheck install.sh rig lib/rig/*.sh scripts/*.sh tests/*.sh
 actionlint .github/workflows/*.yml
 ./install.sh --dry-run        # must make zero system/user changes
-./rig dry-run
+./rig install --dry-run
 ```
 
 - **Catalog (TSV):** prove it is parseable with built-in `while read` and that
@@ -94,7 +97,7 @@ for f in install.sh rig lib/rig/*.sh scripts/*.sh tests/*.sh; do
 done
 bash tests/run-tests.sh
 ./scripts/validate-catalog.sh
-./rig dry-run --select vscode,chrome,node-npm --defaults finder-show-hidden-files
+./rig install --dry-run --select vscode,chrome,node-npm --defaults finder-show-hidden-files
 ./install.sh --dry-run
 shellcheck install.sh rig lib/rig/*.sh scripts/*.sh tests/*.sh
 actionlint .github/workflows/*.yml
@@ -157,6 +160,10 @@ checks before opening or updating a PR.
 - Read `docs/rig-v1-spec.md` first and keep changes spec-aligned.
 - Keep **dry-run side-effect free**: no installs, no `brew bundle`, no shell-file
   edits, no `~/.config/rig/` writes, no `defaults`, no LaunchAgents.
+- Never install Homebrew silently: interactive install must ask first, and
+  non-interactive install must require explicit `--yes`.
+- Never let interactive prompts consume EOF and dump every category; prompt
+  flows require a terminal, while scripts/CI use explicit selection flags.
 - Keep generated shell/config edits idempotent.
 - Preserve the macOS-only guard (`uname -s` must be `Darwin`).
 - Prefer Homebrew/Brewfile-native installation; record any external installer

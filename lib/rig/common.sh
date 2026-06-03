@@ -4,7 +4,7 @@ RIG_VERSION=${RIG_VERSION:-0.1.0}
 
 # Used by lib/rig/plan.sh and rig after sourcing this file.
 # shellcheck disable=SC2034
-RIG_INSTALL_USAGE='Usage: rig install [--dry-run] [--write-config-only] [--from-config] [--select <ids>] [--defaults <ids>] [--category <id>] [--version <id=version>] [--brewfile <path>] [--install-plan <path>] [--auto-update]'
+RIG_INSTALL_USAGE='Usage: rig install [--dry-run] [--yes] [--write-config-only] [--from-config] [--select <ids>] [--defaults <ids>] [--category <id>] [--version <id=version>] [--brewfile <path>] [--install-plan <path>] [--auto-update]'
 # shellcheck disable=SC2034
 RIG_INSTALL_DESCRIPTION='Run without flags for an interactive install.'
 

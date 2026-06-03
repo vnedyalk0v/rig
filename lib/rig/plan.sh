@@ -425,10 +425,13 @@ rig_reset_plan_globals() {
   RIG_PLAN_BREWFILE=
   RIG_PLAN_INSTALL_PLAN=
   RIG_PLAN_DRY_RUN=no
+  RIG_PLAN_YES=no
   RIG_PLAN_WRITE_CONFIG_ONLY=no
   RIG_PLAN_FROM_CONFIG=no
   RIG_PLAN_AUTO_UPDATE=no
   RIG_PLAN_VERSION_MAP=
+  RIG_PLAN_SELECTED_TOOLS=
+  RIG_PLAN_SELECTED_DEFAULTS=
   RIG_PLAN_SELECT_SEEN=no
   RIG_PLAN_DEFAULTS_SEEN=no
   RIG_PLAN_CATEGORY_SEEN=no
@@ -460,6 +463,10 @@ rig_parse_plan_args() {
     case "$1" in
       --dry-run)
         RIG_PLAN_DRY_RUN=yes
+        shift
+        ;;
+      --yes)
+        RIG_PLAN_YES=yes
         shift
         ;;
       --write-config-only)
@@ -588,6 +595,22 @@ rig_reject_from_config_selection_flags() {
   return 0
 }
 
+rig_plan_uses_interactive_selection() {
+  if [ "$RIG_PLAN_FROM_CONFIG" = "yes" ]; then
+    return 1
+  fi
+  if [ "$RIG_PLAN_WRITE_CONFIG_ONLY" = "yes" ]; then
+    return 1
+  fi
+  if [ "$RIG_PLAN_SELECT_SEEN" = "yes" ] || [ "$RIG_PLAN_DEFAULTS_SEEN" = "yes" ] || [ "$RIG_PLAN_CATEGORY_SEEN" = "yes" ] || [ "$RIG_PLAN_VERSION_SEEN" = "yes" ]; then
+    return 1
+  fi
+  if [ "$RIG_PLAN_BREWFILE_SEEN" = "yes" ] || [ "$RIG_PLAN_INSTALL_PLAN_SEEN" = "yes" ]; then
+    return 1
+  fi
+  return 0
+}
+
 rig_resolve_plan_selections() {
   local version_map selected_tools selected_defaults
   version_map=
@@ -694,6 +717,8 @@ rig_render_dry_run_from_config() {
   printf 'rig dry-run\n'
   printf 'No packages, config files, shell files, defaults, or LaunchAgents will be changed.\n\n'
 
+  rig_homebrew_preflight dry-run "$RIG_PLAN_YES" no || return 1
+
   printf '# Brewfile preview\n'
   if [ -f "$brewfile" ] && grep -v '^[[:space:]]*#' "$brewfile" | grep -v '^[[:space:]]*$' >/dev/null 2>&1; then
     brewfile_preview=$(grep -v '^[[:space:]]*#' "$brewfile" | grep -v '^[[:space:]]*$' || true)
@@ -758,12 +783,14 @@ rig_render_dry_run_from_config() {
   fi
 }
 
-rig_render_dry_run_body() {
-  local shell_edit_count profile_path login_shell
-  local brewfile_preview external_preview defaults_preview
-
+rig_print_dry_run_intro() {
   printf 'rig dry-run\n'
   printf 'No packages, config files, shell files, defaults, or LaunchAgents will be changed.\n\n'
+}
+
+rig_render_dry_run_plan_sections() {
+  local shell_edit_count profile_path login_shell
+  local brewfile_preview external_preview defaults_preview
 
   printf '# Brewfile preview\n'
   brewfile_preview=$(rig_emit_brewfile_content "$RIG_PLAN_SELECTED_TOOLS")
@@ -814,6 +841,12 @@ rig_render_dry_run_body() {
   fi
 }
 
+rig_render_dry_run_body() {
+  rig_print_dry_run_intro
+  rig_homebrew_preflight dry-run "$RIG_PLAN_YES" no || return 1
+  rig_render_dry_run_plan_sections
+}
+
 rig_render_dry_run() {
   if ! rig_parse_plan_args dry-run "$@"; then
     return 1
@@ -842,8 +875,18 @@ rig_run_install() {
     if [ "$RIG_PLAN_FROM_CONFIG" = "yes" ]; then
       rig_render_dry_run_from_config || return 1
     else
-      rig_prepare_plan_selections || return 1
-      rig_render_dry_run_body
+      if rig_plan_uses_interactive_selection; then
+        rig_require_macos || return 1
+        rig_validate_catalogs || return 1
+        rig_require_interactive_terminal || return 1
+        rig_print_dry_run_intro
+        rig_homebrew_preflight dry-run "$RIG_PLAN_YES" yes || return 1
+        rig_run_interactive_selection || return 1
+        rig_render_dry_run_plan_sections
+      else
+        rig_prepare_plan_selections || return 1
+        rig_render_dry_run_body
+      fi
     fi
     return 0
   fi
@@ -861,11 +904,22 @@ rig_run_install() {
       rig_print_error "--from-config cannot be combined with --write-config-only"
       return 1
     fi
+    rig_homebrew_preflight install "$RIG_PLAN_YES" no || return 1
     rig_finish_install_apply || return 1
     return 0
   fi
 
-  rig_prepare_plan_selections || return 1
+  if rig_plan_uses_interactive_selection; then
+    rig_require_interactive_terminal || return 1
+    rig_homebrew_preflight install "$RIG_PLAN_YES" yes || return 1
+    rig_run_interactive_selection || return 1
+  else
+    rig_prepare_plan_selections || return 1
+    if [ "$RIG_PLAN_WRITE_CONFIG_ONLY" != "yes" ]; then
+      rig_homebrew_preflight install "$RIG_PLAN_YES" no || return 1
+    fi
+  fi
+
   rig_apply_plan_path_overrides
   rig_write_plan_config || return 1
 

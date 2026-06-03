@@ -18,6 +18,7 @@ rig_prompt_yes_no() {
   fi
   printf '%s [y/N]: ' "$prompt" >&2
   IFS= read -r reply
+  rig_prompt_finish_input_line
   case "$reply" in
     y|Y|yes|YES)
       return 0
@@ -29,6 +30,83 @@ rig_prompt_yes_no() {
       return 1
       ;;
   esac
+}
+
+rig_prompt_finish_input_line() {
+  if [ ! -t 0 ]; then
+    printf '\n' >&2
+  fi
+}
+
+rig_prompt_can_read() {
+  if [ "${RIG_ALLOW_NON_TTY_PROMPTS:-}" = "yes" ]; then
+    return 0
+  fi
+  [ -t 0 ]
+}
+
+rig_require_interactive_terminal() {
+  if rig_prompt_can_read; then
+    return 0
+  fi
+  rig_print_error "interactive selection requires a terminal; use --select/--defaults flags or run rig from an interactive shell"
+  return 1
+}
+
+rig_category_label() {
+  case "$1" in
+    ide) printf 'IDEs and editors\n' ;;
+    browser) printf 'Browsers\n' ;;
+    devops) printf 'DevOps CLIs\n' ;;
+    containers) printf 'Containers\n' ;;
+    runtime) printf 'JavaScript runtimes\n' ;;
+    infra) printf 'Infrastructure tools\n' ;;
+    kubernetes) printf 'Kubernetes tools\n' ;;
+    ai) printf 'AI tools\n' ;;
+    communication) printf 'Communication apps\n' ;;
+    productivity) printf 'Productivity and security\n' ;;
+    fonts) printf 'Fonts\n' ;;
+    *) printf '%s\n' "$1" ;;
+  esac
+}
+
+rig_prompt_screen_clear() {
+  if [ -t 0 ] && [ "${RIG_PROMPT_NO_CLEAR:-}" != "yes" ]; then
+    printf '\033[H\033[2J' >&2
+  fi
+}
+
+rig_count_lines() {
+  local value count line
+  value=$1
+  count=0
+  while IFS= read -r line || [ "$line" != "" ]; do
+    if [ "$line" = "" ]; then
+      continue
+    fi
+    count=$((count + 1))
+  done < <(printf '%s\n' "$value")
+  printf '%s\n' "$count"
+}
+
+rig_prompt_header() {
+  local title selected_count
+  title=$1
+  selected_count=${RIG_PROMPT_SELECTED_COUNT:-0}
+  rig_prompt_screen_clear
+  printf 'rig setup' >&2
+  if [ "${RIG_PLAN_DRY_RUN:-no}" = "yes" ]; then
+    printf ' dry-run' >&2
+  fi
+  if [ "${RIG_PROMPT_STEP:-}" != "" ]; then
+    printf '  |  category %s' "$RIG_PROMPT_STEP" >&2
+  fi
+  printf '\n' >&2
+  printf '%s\n' "$title" >&2
+  if [ "$selected_count" -gt 0 ]; then
+    printf 'Selected so far: %s\n' "$selected_count" >&2
+  fi
+  printf '\n' >&2
 }
 
 rig_prompt_label_to_id() {
@@ -57,10 +135,223 @@ rig_prompt_ids_from_labels() {
   done
 }
 
+rig_prompt_item_id_at() {
+  local items wanted index item_id _item_label _item_description
+  items=$1
+  wanted=$2
+  index=1
+  while IFS='|' read -r item_id _item_label _item_description; do
+    if [ "$item_id" = "" ]; then
+      continue
+    fi
+    if [ "$index" -eq "$wanted" ]; then
+      printf '%s\n' "$item_id"
+      return 0
+    fi
+    index=$((index + 1))
+  done < <(printf '%s\n' "$items")
+  return 1
+}
+
+rig_prompt_selection_contains() {
+  local selected wanted item
+  selected=$1
+  wanted=$2
+  while IFS= read -r item || [ "$item" != "" ]; do
+    if [ "$item" = "$wanted" ]; then
+      return 0
+    fi
+  done < <(printf '%s\n' "$selected")
+  return 1
+}
+
+rig_prompt_toggle_selected() {
+  local selected wanted output item found
+  selected=$1
+  wanted=$2
+  output='
+'
+  found=no
+  while IFS= read -r item || [ "$item" != "" ]; do
+    if [ "$item" = "" ]; then
+      continue
+    fi
+    if [ "$item" = "$wanted" ]; then
+      found=yes
+      continue
+    fi
+    if ! rig_prompt_selection_contains "$output" "$item"; then
+      output="${output}${item}
+"
+    fi
+  done < <(printf '%s\n' "$selected")
+  if [ "$found" = "no" ]; then
+    output="${output}${wanted}
+"
+  fi
+  printf '%s' "$output"
+}
+
+rig_prompt_select_all_items() {
+  local items selected item_id _item_label _item_description
+  items=$1
+  selected='
+'
+  while IFS='|' read -r item_id _item_label _item_description; do
+    if [ "$item_id" = "" ]; then
+      continue
+    fi
+    selected="${selected}${item_id}
+"
+  done < <(printf '%s\n' "$items")
+  printf '%s' "$selected"
+}
+
+rig_prompt_print_selected_items() {
+  local items selected item_id _item_label _item_description
+  items=$1
+  selected=$2
+  while IFS='|' read -r item_id _item_label _item_description; do
+    if [ "$item_id" = "" ]; then
+      continue
+    fi
+    if rig_prompt_selection_contains "$selected" "$item_id"; then
+      printf '%s\n' "$item_id"
+    fi
+  done < <(printf '%s\n' "$items")
+}
+
+rig_prompt_render_multi_select_rows() {
+  local items selected cursor row_mode index item_id item_label item_description pointer mark
+  items=$1
+  selected=$2
+  cursor=$3
+  row_mode=$4
+  index=1
+  while IFS='|' read -r item_id item_label item_description; do
+    if [ "$item_id" = "" ]; then
+      continue
+    fi
+    pointer=' '
+    if [ "$index" -eq "$cursor" ]; then
+      pointer='>'
+    fi
+    mark=' '
+    if rig_prompt_selection_contains "$selected" "$item_id"; then
+      mark=x
+    fi
+    case "$row_mode" in
+      defaults)
+        printf '%s [%s] %-28s %s\n' "$pointer" "$mark" "$item_id" "$item_description" >&2
+        ;;
+      *)
+        printf '%s [%s] %-2s %-24s %s\n' "$pointer" "$mark" "$index" "$item_label" "$item_description" >&2
+        ;;
+    esac
+    index=$((index + 1))
+  done < <(printf '%s\n' "$items")
+}
+
+rig_prompt_read_key() {
+  local key rest escape
+  RIG_PROMPT_KEY=
+  if ! IFS= read -r -s -n 1 key; then
+    return 1
+  fi
+  escape=$(printf '\033')
+  if [ "$key" = "$escape" ]; then
+    rest=
+    IFS= read -r -s -n 2 rest || true
+    case "$rest" in
+      "[A") RIG_PROMPT_KEY=up ;;
+      "[B") RIG_PROMPT_KEY=down ;;
+      *) RIG_PROMPT_KEY=other ;;
+    esac
+    return 0
+  fi
+  case "$key" in
+    "") RIG_PROMPT_KEY=enter ;;
+    " ") RIG_PROMPT_KEY=space ;;
+    a|A) RIG_PROMPT_KEY=all ;;
+    n|N) RIG_PROMPT_KEY=none ;;
+    q|Q) RIG_PROMPT_KEY=quit ;;
+    j|J) RIG_PROMPT_KEY=down ;;
+    k|K) RIG_PROMPT_KEY=up ;;
+    *) RIG_PROMPT_KEY=other ;;
+  esac
+  return 0
+}
+
+rig_prompt_multi_select() {
+  local title items row_mode item_count cursor selected key current_id
+  title=$1
+  items=$2
+  row_mode=$3
+  item_count=$(rig_count_lines "$items")
+  if [ "$item_count" -eq 0 ]; then
+    return 0
+  fi
+
+  cursor=1
+  selected='
+'
+  while :; do
+    rig_prompt_header "$title"
+    printf 'Use Up/Down to move, Space to select/deselect, Enter to continue.\n' >&2
+    printf 'Press a to select all, n to clear, q to skip this category.\n\n' >&2
+    rig_prompt_render_multi_select_rows "$items" "$selected" "$cursor" "$row_mode"
+    printf '\n' >&2
+
+    if ! rig_prompt_read_key; then
+      break
+    fi
+    key=$RIG_PROMPT_KEY
+    case "$key" in
+      up)
+        if [ "$cursor" -le 1 ]; then
+          cursor=$item_count
+        else
+          cursor=$((cursor - 1))
+        fi
+        ;;
+      down)
+        if [ "$cursor" -ge "$item_count" ]; then
+          cursor=1
+        else
+          cursor=$((cursor + 1))
+        fi
+        ;;
+      space)
+        current_id=$(rig_prompt_item_id_at "$items" "$cursor")
+        selected=$(rig_prompt_toggle_selected "$selected" "$current_id")
+        ;;
+      all)
+        selected=$(rig_prompt_select_all_items "$items")
+        ;;
+      none)
+        selected='
+'
+        ;;
+      enter)
+        break
+        ;;
+      quit)
+        selected='
+'
+        break
+        ;;
+    esac
+  done
+
+  printf '\n' >&2
+  rig_prompt_print_selected_items "$items" "$selected"
+}
+
 rig_prompt_tools_for_category() {
-  local category items item_count index choice selected token
+  local category category_label items item_count choice
   local _category id label _kind _package _default_flag description _version_strategy _versions _notes
   category=$1
+  category_label=$(rig_category_label "$category")
   items=
   item_count=0
   while IFS="$RIG_TSV_DELIMITER" read -r _category id label _kind _package _default_flag description _version_strategy _versions _notes; do
@@ -89,45 +380,7 @@ rig_prompt_tools_for_category() {
     return 0
   fi
 
-  printf 'Category: %s\n' "$category" >&2
-  index=1
-  printf '%s\n' "$items" | while IFS='|' read -r tool_id tool_label tool_description; do
-    if [ "$tool_id" = "" ]; then
-      continue
-    fi
-    printf '  %s) %s - %s\n' "$index" "$tool_label" "$tool_description" >&2
-    index=$((index + 1))
-  done
-  printf 'Enter numbers or ids (comma/space separated, blank to skip): ' >&2
-  IFS= read -r choice
-  if [ "$choice" = "" ]; then
-    return 0
-  fi
-  while IFS= read -r token || [ "$token" != "" ]; do
-    if [ "$token" = "" ]; then
-      continue
-    fi
-    case "$token" in
-      *[!0-9]*)
-        if rig_lookup_tool "$token" >/dev/null 2>&1; then
-          printf '%s\n' "$token"
-        fi
-        ;;
-      *)
-        index=1
-        printf '%s\n' "$items" | while IFS='|' read -r tool_id tool_label _tool_description; do
-          if [ "$tool_id" = "" ]; then
-            continue
-          fi
-          if [ "$index" -eq "$token" ]; then
-            printf '%s\n' "$tool_id"
-          fi
-          index=$((index + 1))
-        done
-        ;;
-    esac
-  done < <(printf '%s\n' "$choice" | tr ', ' '
-')
+  rig_prompt_multi_select "$category_label" "$items" tools
 }
 
 rig_prompt_version() {
@@ -155,6 +408,7 @@ rig_prompt_version() {
   done < <(rig_join_csv_as_lines "$versions_csv")
   printf 'Version [latest]: ' >&2
   IFS= read -r choice
+  rig_prompt_finish_input_line
   if [ "$choice" = "" ]; then
     choice=latest
   fi
@@ -185,28 +439,7 @@ rig_prompt_defaults() {
     return 0
   fi
 
-  printf 'Optional macOS preferences (enter ids comma-separated, blank to skip):\n' >&2
-  printf '%s\n' "$items" | while IFS='|' read -r default_id default_label default_description; do
-    if [ "$default_id" = "" ]; then
-      continue
-    fi
-    printf '  %s - %s\n' "$default_id" "$default_description" >&2
-  done
-  printf 'Defaults: ' >&2
-  IFS= read -r selected
-  if [ "$selected" = "" ]; then
-    return 0
-  fi
-  while IFS= read -r default_id || [ "$default_id" != "" ]; do
-    if [ "$default_id" = "" ]; then
-      continue
-    fi
-    if ! rig_default_exists "$default_id"; then
-      rig_print_error "unknown macOS default id: $default_id"
-      return 1
-    fi
-    printf '%s\n' "$default_id"
-  done < <(rig_join_csv_as_lines "$selected")
+  rig_prompt_multi_select "macOS preferences" "$items" defaults
 }
 
 rig_prompt_auto_update() {
@@ -232,16 +465,23 @@ rig_each_category() {
 }
 
 rig_run_interactive_selection() {
-  local category selected_tools selected_defaults version_map tool_id row version _versions
+  local category selected_tools selected_defaults version_map tool_id row version _versions category_index
   local _category _id _label _kind _package _default_flag _description _version_strategy _notes auto_update
-  rig_reset_plan_globals
+  RIG_PLAN_SELECTED_TOOLS=
+  RIG_PLAN_SELECTED_DEFAULTS=
+  RIG_PLAN_VERSION_MAP=
+  rig_require_interactive_terminal || return 1
   selected_tools=
   version_map=
-  while IFS= read -r category || [ "$category" != "" ]; do
+  category_index=0
+  while IFS= read -r category <&4 || [ "$category" != "" ]; do
     if [ "$category" = "" ]; then
       continue
     fi
-    while IFS= read -r tool_id || [ "$tool_id" != "" ]; do
+    category_index=$((category_index + 1))
+    RIG_PROMPT_STEP=$category_index
+    RIG_PROMPT_SELECTED_COUNT=$(rig_count_lines "$selected_tools")
+    while IFS= read -r tool_id <&3 || [ "$tool_id" != "" ]; do
       if [ "$tool_id" = "" ]; then
         continue
       fi
@@ -257,10 +497,14 @@ rig_run_interactive_selection() {
           version_map=$(rig_version_map_set "$version_map" "$tool_id" "$version")
         fi
       fi
-    done < <(rig_prompt_tools_for_category "$category")
-  done < <(rig_each_category)
+    done 3< <(rig_prompt_tools_for_category "$category")
+  done 4< <(rig_each_category)
 
+  RIG_PROMPT_STEP=
+  RIG_PROMPT_SELECTED_COUNT=$(rig_count_lines "$selected_tools")
   selected_defaults=$(rig_prompt_defaults)
+  RIG_PROMPT_STEP=
+  RIG_PROMPT_SELECTED_COUNT=$(rig_count_lines "$selected_tools")
   auto_update=$(rig_prompt_auto_update)
 
   # Set for rig_install_command caller.
