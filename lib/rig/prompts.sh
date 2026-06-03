@@ -21,7 +21,10 @@ rig_prompt_yes_no() {
   else
     printf '%s [y/N]: ' "$prompt" >&2
   fi
-  IFS= read -r reply
+  if ! IFS= read -r reply; then
+    rig_prompt_finish_input_line
+    return 1
+  fi
   rig_prompt_finish_input_line
   case "$reply" in
     y|Y|yes|YES)
@@ -120,6 +123,10 @@ rig_prompt_green() {
   rig_prompt_style 32 "$1"
 }
 
+rig_prompt_sanitize_text() {
+  LC_ALL=C printf '%s' "$1" | tr -d '\000-\010\013\014\016-\037\177'
+}
+
 rig_count_lines() {
   local value count line
   value=$1
@@ -155,14 +162,15 @@ rig_prompt_header() {
 }
 
 rig_prompt_label_to_id() {
-  local items label item_id item_label
+  local items label item_id item_label safe_label
   items=$1
   label=$2
   while IFS='|' read -r item_id item_label _item_description; do
     if [ "$item_id" = "" ]; then
       continue
     fi
-    if [ "$item_label" = "$label" ]; then
+    safe_label=$(rig_prompt_sanitize_text "$item_label")
+    if [ "$safe_label" = "$label" ]; then
       printf '%s\n' "$item_id"
       return 0
     fi
@@ -277,6 +285,8 @@ rig_prompt_render_multi_select_rows() {
     if [ "$item_id" = "" ]; then
       continue
     fi
+    item_label=$(rig_prompt_sanitize_text "$item_label")
+    item_description=$(rig_prompt_sanitize_text "$item_description")
     pointer=' '
     if [ "$index" -eq "$cursor" ]; then
       pointer='>'
@@ -412,6 +422,7 @@ rig_prompt_multi_select() {
 rig_prompt_tools_for_category() {
   local category category_label items item_count choice
   local _category id label _kind _package _default_flag description _version_strategy _versions _notes
+  local safe_tool_label safe_tool_description
   category=$1
   category_label=$(rig_category_label "$category")
   items=
@@ -433,7 +444,9 @@ rig_prompt_tools_for_category() {
       if [ "$tool_id" = "" ]; then
         continue
       fi
-      printf '%s - %s\n' "$tool_label" "$tool_description"
+      safe_tool_label=$(rig_prompt_sanitize_text "$tool_label")
+      safe_tool_description=$(rig_prompt_sanitize_text "$tool_description")
+      printf '%s - %s\n' "$safe_tool_label" "$safe_tool_description"
     done | gum choose --no-limit --header "Select tools in $category (space to toggle)" || true)
     if [ "$choice" = "" ]; then
       return 0
@@ -481,7 +494,7 @@ rig_prompt_version() {
 }
 
 rig_prompt_defaults() {
-  local items selected default_id
+  local items selected default_id safe_default_label safe_default_description
   items=
   while IFS="$RIG_TSV_DELIMITER" read -r id label description _command _restart; do
     items="${items}${id}|${label}|${description}
@@ -492,7 +505,9 @@ rig_prompt_defaults() {
       if [ "$default_id" = "" ]; then
         continue
       fi
-      printf '%s - %s\n' "$default_label" "$default_description"
+      safe_default_label=$(rig_prompt_sanitize_text "$default_label")
+      safe_default_description=$(rig_prompt_sanitize_text "$default_description")
+      printf '%s - %s\n' "$safe_default_label" "$safe_default_description"
     done | gum choose --no-limit --header "Optional macOS preferences" || true)
     if [ "$selected" = "" ]; then
       return 0
@@ -507,7 +522,7 @@ rig_prompt_defaults() {
 rig_prompt_append_label() {
   local current label
   current=$1
-  label=$2
+  label=$(rig_prompt_sanitize_text "$2")
   if [ "$current" = "" ]; then
     printf '%s' "$label"
   else
@@ -536,7 +551,7 @@ rig_prompt_print_review_tools() {
       fi
     done < <(printf '%s\n' "$selected_tools")
     if [ "$labels" != "" ]; then
-      category_label=$(rig_category_label "$category")
+      category_label=$(rig_prompt_sanitize_text "$(rig_category_label "$category")")
       printf '  %s: %s\n' "$category_label" "$labels" >&2
       printed=yes
     fi
@@ -558,6 +573,7 @@ rig_prompt_print_review_defaults() {
     fi
     row=$(rig_lookup_default "$selected_id")
     IFS="$RIG_TSV_DELIMITER" read -r _id label _description _command _restart < <(printf '%s\n' "$row")
+    label=$(rig_prompt_sanitize_text "$label")
     printf '  %s\n' "$label" >&2
     printed=yes
   done < <(printf '%s\n' "$selected_defaults")
@@ -650,7 +666,11 @@ rig_run_interactive_selection() {
   selected_defaults=$(rig_prompt_defaults)
   RIG_PROMPT_STEP=
   RIG_PROMPT_SELECTED_COUNT=$(rig_count_lines "$selected_tools")
-  auto_update=$(rig_prompt_auto_update)
+  if [ "$RIG_PLAN_AUTO_UPDATE" = "yes" ]; then
+    auto_update=yes
+  else
+    auto_update=$(rig_prompt_auto_update)
+  fi
 
   # Set for rig_install_command caller.
   # shellcheck disable=SC2034
@@ -659,9 +679,7 @@ rig_run_interactive_selection() {
   RIG_PLAN_SELECTED_DEFAULTS=$selected_defaults
   # shellcheck disable=SC2034
   RIG_PLAN_VERSION_MAP=$version_map
-  if [ "$auto_update" = "yes" ]; then
-    # shellcheck disable=SC2034
-    RIG_PLAN_AUTO_UPDATE=yes
-  fi
+  # shellcheck disable=SC2034
+  RIG_PLAN_AUTO_UPDATE=$auto_update
   rig_prompt_review_selection || return 1
 }

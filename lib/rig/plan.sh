@@ -417,6 +417,44 @@ rig_count_shell_edits_needed() {
   printf '%s\n' "$count"
 }
 
+rig_count_homebrew_selected() {
+  local selected_tools selected_id row kind count _category _id _label _package _default_flag _description _version_strategy _versions _notes
+  selected_tools=$1
+  count=0
+  while IFS= read -r selected_id || [ "$selected_id" != "" ]; do
+    if [ "$selected_id" = "" ]; then
+      continue
+    fi
+    row=$(rig_lookup_tool "$selected_id")
+    IFS="$RIG_TSV_DELIMITER" read -r _category _id _label kind _package _default_flag _description _version_strategy _versions _notes < <(printf '%s\n' "$row")
+    case "$kind" in
+      formula|cask|tap-formula|mas|vscode)
+        count=$((count + 1))
+        ;;
+    esac
+  done < <(printf '%s\n' "$selected_tools")
+  printf '%s\n' "$count"
+}
+
+rig_count_external_selected() {
+  local selected_tools selected_id row kind count _category _id _label _package _default_flag _description _version_strategy _versions _notes
+  selected_tools=$1
+  count=0
+  while IFS= read -r selected_id || [ "$selected_id" != "" ]; do
+    if [ "$selected_id" = "" ]; then
+      continue
+    fi
+    row=$(rig_lookup_tool "$selected_id")
+    IFS="$RIG_TSV_DELIMITER" read -r _category _id _label kind _package _default_flag _description _version_strategy _versions _notes < <(printf '%s\n' "$row")
+    case "$kind" in
+      external|version-manager)
+        count=$((count + 1))
+        ;;
+    esac
+  done < <(printf '%s\n' "$selected_tools")
+  printf '%s\n' "$count"
+}
+
 rig_reset_plan_globals() {
   RIG_PLAN_SELECT=
   RIG_PLAN_DEFAULTS=
@@ -714,16 +752,31 @@ rig_count_preview_lines() {
   printf '%s\n' "$count"
 }
 
+rig_count_brewfile_preview_selections() {
+  local value count line
+  value=$1
+  count=0
+  while IFS= read -r line || [ "$line" != "" ]; do
+    case "$line" in
+      ""|"tap "*)
+        continue
+        ;;
+    esac
+    count=$((count + 1))
+  done < <(printf '%s\n' "$value")
+  printf '%s\n' "$count"
+}
+
 rig_render_dry_run_summary() {
-  local brewfile_preview external_preview defaults_preview shell_edit_count
-  brewfile_preview=$1
-  external_preview=$2
-  defaults_preview=$3
+  local brewfile_count external_count defaults_count shell_edit_count
+  brewfile_count=$1
+  external_count=$2
+  defaults_count=$3
   shell_edit_count=$4
   printf '# Summary\n'
-  printf 'Homebrew-native packages: %s\n' "$(rig_count_preview_lines "$brewfile_preview")"
-  printf 'External installers: %s\n' "$(rig_count_preview_lines "$external_preview")"
-  printf 'macOS defaults: %s\n' "$(rig_count_preview_lines "$defaults_preview")"
+  printf 'Homebrew-native packages: %s\n' "$brewfile_count"
+  printf 'External installers: %s\n' "$external_count"
+  printf 'macOS defaults: %s\n' "$defaults_count"
   printf 'Shell/profile edits: %s\n\n' "$shell_edit_count"
 }
 
@@ -768,7 +821,11 @@ rig_render_dry_run_from_config() {
   fi
   shell_edit_count=$(rig_count_shell_edits_from_plan_file "$plan_file")
 
-  rig_render_dry_run_summary "$brewfile_preview" "$external_preview" "$defaults_preview" "$shell_edit_count"
+  rig_render_dry_run_summary \
+    "$(rig_count_brewfile_preview_selections "$brewfile_preview")" \
+    "$(rig_count_preview_lines "$external_preview")" \
+    "$(rig_count_preview_lines "$defaults_preview")" \
+    "$shell_edit_count"
 
   printf '# Brewfile preview\n'
   if [ "$brewfile_preview" != "" ]; then
@@ -823,13 +880,17 @@ rig_print_dry_run_intro() {
 rig_render_dry_run_plan_sections() {
   local shell_edit_count profile_path login_shell
   local brewfile_preview external_preview defaults_preview
+  local brewfile_count external_count defaults_count
 
   brewfile_preview=$(rig_emit_brewfile_content "$RIG_PLAN_SELECTED_TOOLS")
   external_preview=$(rig_emit_install_plan_preview "$RIG_PLAN_SELECTED_TOOLS" "$RIG_PLAN_VERSION_MAP")
   defaults_preview=$(rig_emit_macos_defaults_preview "$RIG_PLAN_SELECTED_DEFAULTS")
   shell_edit_count=$(rig_count_shell_edits_needed "$RIG_PLAN_SELECTED_TOOLS")
+  brewfile_count=$(rig_count_homebrew_selected "$RIG_PLAN_SELECTED_TOOLS")
+  external_count=$(rig_count_external_selected "$RIG_PLAN_SELECTED_TOOLS")
+  defaults_count=$(rig_count_lines "$RIG_PLAN_SELECTED_DEFAULTS")
 
-  rig_render_dry_run_summary "$brewfile_preview" "$external_preview" "$defaults_preview" "$shell_edit_count"
+  rig_render_dry_run_summary "$brewfile_count" "$external_count" "$defaults_count" "$shell_edit_count"
 
   printf '# Brewfile preview\n'
   if [ "$brewfile_preview" = "" ]; then

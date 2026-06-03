@@ -210,6 +210,18 @@ assert_contains "$out" "# macOS defaults preview" "dry-run prints macOS defaults
 assert_contains "$out" "defaults write com.apple.finder AppleShowAllFiles -bool true" "dry-run includes selected Finder default"
 assert_contains "$out" "# Shell/profile edits preview" "dry-run prints shell edits section"
 
+tap_tools_catalog="$TEST_TMP/tap-tools.tsv"
+{
+  printf 'category\tid\tlabel\tkind\tpackage\tdefault\tdescription\tversion_strategy\tversions\tnotes\n'
+  printf 'devops\ttap-tool\tTap Tool\ttap-formula\towner/tap/tool\tno\tTool from a tap\thomebrew-latest\t\t\n'
+} >"$tap_tools_catalog"
+out="$TEST_TMP/dry-run-tap-formula-summary.out"
+PATH="$fake_darwin_bin:$PATH" RIG_TOOLS_CATALOG="$tap_tools_catalog" run_capture "$out" ./rig dry-run --select tap-tool
+assert_success "$?" "rig dry-run succeeds with tap-formula tool"
+assert_contains "$out" "tap \"owner/tap\"" "dry-run includes tap for tap-formula tool"
+assert_contains "$out" "brew \"tool\"" "dry-run includes formula for tap-formula tool"
+assert_contains "$out" "Homebrew-native packages: 1" "dry-run summary counts tap-formula as one package"
+
 out="$TEST_TMP/dry-run-non-macos.out"
 PATH="$fake_linux_bin:$PATH" RIG_LOGIN_SHELL=/bin/zsh run_capture "$out" ./rig dry-run --select vscode
 assert_failure "$?" "rig dry-run fails clearly on non-macOS"
@@ -255,6 +267,7 @@ assert_contains "$out" "interactive selection requires a terminal" "non-tty inte
 assert_not_contains "$out" "Category: browser" "non-tty interactive dry-run does not spill categories"
 
 missing_brew_prefix="$TEST_TMP/missing-brew-prefix"
+homebrew_install_command="/bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
 out="$TEST_TMP/install-dry-run-missing-homebrew.out"
 dry_run_home="$TEST_TMP/dry-run-missing-homebrew-home"
 mkdir -p "$dry_run_home"
@@ -262,6 +275,8 @@ PATH="$fake_darwin_bin:/usr/bin:/bin" HOME="$dry_run_home" RIG_CONFIG_DIR="$dry_
 assert_success "$?" "rig install --dry-run previews missing Homebrew"
 assert_contains "$out" "# Homebrew prerequisite preview" "install --dry-run prints Homebrew prerequisite section"
 assert_contains "$out" "Would ask for approval to install Homebrew" "install --dry-run explains Homebrew approval"
+assert_contains "$out" "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh" "install --dry-run discloses Homebrew installer URL"
+assert_contains "$out" "$homebrew_install_command" "install --dry-run discloses Homebrew install command"
 if [ -e "$dry_run_home/.config/rig" ]; then
   fail "rig install --dry-run missing Homebrew does not write config"
 else
@@ -275,15 +290,21 @@ mkdir -p "$interactive_dry_run_home"
 PATH="$fake_darwin_bin:/usr/bin:/bin" HOME="$interactive_dry_run_home" RIG_CONFIG_DIR="$interactive_dry_run_home/.config/rig" RIG_HOMEBREW_PREFIX="$missing_brew_prefix" RIG_LOGIN_SHELL=/bin/zsh run_capture "$out" bash -c '
   {
     printf "y\n"
+    category_count=$(awk -F "\t" "NR>1 && !seen[\$1]++ { count++ } END { print count }" "'"$ROOT_DIR"'/catalog/tools.tsv")
     i=0
-    while [ "$i" -lt 40 ]; do
+    while [ "$i" -lt "$category_count" ]; do
       printf "\n"
       i=$((i + 1))
     done
+    printf "\n"
+    printf "\n"
+    printf "\n"
   } | RIG_ALLOW_NON_TTY_PROMPTS=yes ./rig install --dry-run
 '
 assert_success "$?" "rig install --dry-run can simulate approving missing Homebrew"
 assert_contains "$out" "Would install Homebrew before showing tool selections" "interactive dry-run reports simulated Homebrew install"
+assert_contains "$out" "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh" "interactive install --dry-run discloses Homebrew installer URL"
+assert_contains "$out" "$homebrew_install_command" "interactive install --dry-run discloses Homebrew install command"
 assert_contains "$out" "IDEs and editors" "interactive dry-run reaches tool selection after approval"
 assert_not_contains "$out" "Selection: Enable automatic" "interactive dry-run keeps prompts on separate lines"
 if [ -e "$interactive_dry_run_home/.config/rig" ]; then
@@ -296,12 +317,18 @@ out="$TEST_TMP/install-dry-run-all-categories.out"
 all_categories_home="$TEST_TMP/install-dry-run-all-categories-home"
 mkdir -p "$all_categories_home"
 # shellcheck disable=SC2016
-PATH="$fake_darwin_bin:/usr/bin:/bin" HOME="$all_categories_home" RIG_CONFIG_DIR="$all_categories_home/.config/rig" RIG_LOGIN_SHELL=/bin/zsh run_capture "$out" bash -c '
-  i=0
-  while [ "$i" -lt 30 ]; do
+PATH="$fake_darwin_bin:$fake_brew_bin:/usr/bin:/bin" HOME="$all_categories_home" RIG_CONFIG_DIR="$all_categories_home/.config/rig" RIG_LOGIN_SHELL=/bin/zsh run_capture "$out" bash -c '
+  category_count=$(awk -F "\t" "NR>1 && !seen[\$1]++ { count++ } END { print count }" "'"$ROOT_DIR"'/catalog/tools.tsv")
+  {
+    i=0
+    while [ "$i" -lt "$category_count" ]; do
+      printf "\n"
+      i=$((i + 1))
+    done
     printf "\n"
-    i=$((i + 1))
-  done | RIG_ALLOW_NON_TTY_PROMPTS=yes RIG_PROMPT_NO_CLEAR=yes ./rig install --dry-run
+    printf "\n"
+    printf "\n"
+  } | RIG_ALLOW_NON_TTY_PROMPTS=yes RIG_PROMPT_NO_CLEAR=yes ./rig install --dry-run
 '
 assert_success "$?" "interactive dry-run blank selection traverses all categories"
 assert_contains "$out" "AI tools" "interactive dry-run includes AI category"
@@ -598,6 +625,74 @@ PATH="$fake_darwin_bin:$PATH" RIG_ROOT="$ROOT_DIR" bash -c '
 ' >"$out" 2>&1
 assert_success "$?" "interactive selection stub succeeds"
 assert_contains "$out" "tools:vscode" "interactive selection stub selects vscode"
+
+out="$TEST_TMP/interactive-selection-auto-update-flag.out"
+PATH="$fake_darwin_bin:$PATH" RIG_ROOT="$ROOT_DIR" bash -c '
+  . "'"$ROOT_DIR"'/lib/rig/common.sh"
+  . "'"$ROOT_DIR"'/lib/rig/catalog.sh"
+  . "'"$ROOT_DIR"'/lib/rig/plan.sh"
+  . "'"$ROOT_DIR"'/lib/rig/prompts.sh"
+  rig_each_category() { return 0; }
+  rig_prompt_defaults() { return 0; }
+  rig_prompt_auto_update() {
+    printf "auto-update prompt was called\n" >&2
+    printf "no\n"
+  }
+  rig_prompt_review_selection() {
+    printf "auto:%s\n" "$RIG_PLAN_AUTO_UPDATE"
+    return 0
+  }
+  RIG_ALLOW_NON_TTY_PROMPTS=yes
+  RIG_PLAN_AUTO_UPDATE=yes
+  rig_run_interactive_selection
+' >"$out" 2>&1
+assert_success "$?" "interactive selection honors --auto-update flag"
+assert_contains "$out" "auto:yes" "interactive selection preserves CLI auto-update choice"
+assert_not_contains "$out" "auto-update prompt was called" "interactive selection skips auto-update prompt when flag is set"
+
+out="$TEST_TMP/prompt-yes-no-eof.out"
+PATH="$fake_darwin_bin:$PATH" RIG_ROOT="$ROOT_DIR" bash -c '
+  . "'"$ROOT_DIR"'/lib/rig/common.sh"
+  . "'"$ROOT_DIR"'/lib/rig/prompts.sh"
+  rig_prompt_yes_no "Proceed?" yes < /dev/null
+' >"$out" 2>&1
+assert_failure "$?" "yes/no prompt fails closed on EOF"
+assert_contains "$out" "Proceed? [Y/n]:" "yes/no prompt renders default before EOF"
+
+prompt_stderr="$TEST_TMP/prompt-sanitized-rows.stderr"
+PATH="$fake_darwin_bin:$PATH" RIG_ROOT="$ROOT_DIR" bash -c '
+  . "'"$ROOT_DIR"'/lib/rig/common.sh"
+  . "'"$ROOT_DIR"'/lib/rig/prompts.sh"
+  esc=$(printf "\033")
+  items=$(printf "evil|Bad%s[2JLabel|Desc%s[31m\n" "$esc" "$esc")
+  rig_prompt_render_multi_select_rows "$items" "" 1 tools
+' >"$TEST_TMP/prompt-sanitized-rows.stdout" 2>"$prompt_stderr"
+assert_success "$?" "prompt row rendering succeeds with control characters"
+assert_contains "$prompt_stderr" "Bad[2JLabel" "prompt row keeps printable text from escaped label"
+assert_not_contains "$prompt_stderr" "$(printf '\033')" "prompt row strips terminal escape bytes"
+
+prompt_stderr="$TEST_TMP/prompt-sanitized-review.stderr"
+PATH="$fake_darwin_bin:$PATH" RIG_ROOT="$ROOT_DIR" bash -c '
+  . "'"$ROOT_DIR"'/lib/rig/common.sh"
+  . "'"$ROOT_DIR"'/lib/rig/catalog.sh"
+  . "'"$ROOT_DIR"'/lib/rig/prompts.sh"
+  esc=$(printf "\033")
+  rig_each_category() { printf "ide\n"; }
+  rig_lookup_tool() {
+    d=$RIG_TSV_DELIMITER
+    printf "ide%sevil%sBad%s[2JTool%scask%sevil%sno%sDesc%shomebrew-latest%s%s\n" "$d" "$d" "$esc" "$d" "$d" "$d" "$d" "$d" "$d" "$d"
+  }
+  rig_lookup_default() {
+    d=$RIG_TSV_DELIMITER
+    printf "evil-default%sBad%s[2JDefault%sDesc%sdefaults write test key value%s\n" "$d" "$esc" "$d" "$d" "$d"
+  }
+  rig_prompt_print_review_tools "$(printf "evil\n")"
+  rig_prompt_print_review_defaults "$(printf "evil-default\n")"
+' >"$TEST_TMP/prompt-sanitized-review.stdout" 2>"$prompt_stderr"
+assert_success "$?" "review rendering succeeds with control characters"
+assert_contains "$prompt_stderr" "Bad[2JTool" "review rendering keeps printable text from escaped tool label"
+assert_contains "$prompt_stderr" "Bad[2JDefault" "review rendering keeps printable text from escaped default label"
+assert_not_contains "$prompt_stderr" "$(printf '\033')" "review rendering strips terminal escape bytes"
 
 prompt_stdout="$TEST_TMP/review-selection.stdout"
 prompt_stderr="$TEST_TMP/review-selection.stderr"

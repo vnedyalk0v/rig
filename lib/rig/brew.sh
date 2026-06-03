@@ -35,6 +35,19 @@ rig_brew_shellenv() {
   eval "$brew_shellenv"
 }
 
+rig_homebrew_installer_url() {
+  printf 'https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh\n'
+}
+
+rig_homebrew_install_command() {
+  printf '%s\n' "/bin/bash -c \"\$(curl -fsSL $(rig_homebrew_installer_url))\""
+}
+
+rig_print_homebrew_installer_preview() {
+  printf 'Installer URL: %s\n' "$(rig_homebrew_installer_url)"
+  printf 'Install command: %s\n' "$(rig_homebrew_install_command)"
+}
+
 rig_ensure_homebrew() {
   if rig_brew_command_path >/dev/null 2>&1; then
     rig_brew_shellenv || return 1
@@ -49,12 +62,14 @@ rig_ensure_homebrew() {
 }
 
 rig_install_homebrew() {
+  local installer_url
   if [ "${RIG_SKIP_HOMEBREW_INSTALL:-}" = "yes" ]; then
     rig_print_error "Homebrew is required but RIG_SKIP_HOMEBREW_INSTALL=yes"
     return 1
   fi
+  installer_url=$(rig_homebrew_installer_url)
   printf 'Installing Homebrew...\n'
-  NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || return 1
+  NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL "$installer_url")" || return 1
   rig_brew_shellenv || return 1
   if ! rig_brew_command_path >/dev/null 2>&1; then
     rig_print_error "Homebrew installation finished but brew is not available"
@@ -83,6 +98,7 @@ rig_homebrew_preflight() {
   if [ "$mode" = "dry-run" ]; then
     printf '# Homebrew prerequisite preview\n'
     printf 'Homebrew is required to install selected software.\n'
+    rig_print_homebrew_installer_preview
     if [ "$interactive" = "yes" ]; then
       if rig_prompt_yes_no "Homebrew is missing. Simulate approving Homebrew installation for this dry-run?" no; then
         printf 'Would install Homebrew before showing tool selections.\n\n'

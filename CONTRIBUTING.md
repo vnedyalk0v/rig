@@ -33,7 +33,8 @@ Out of scope for v1:
   install.
 - Prefer Homebrew Bundle for Homebrew-native packages.
 - Do not install Homebrew silently. Interactive installs ask for approval;
-  non-interactive installs require explicit `--yes`.
+  non-interactive installs require explicit `--yes` only when Homebrew is
+  missing and installation would proceed.
 - Do not let interactive prompts run on non-terminal stdin; scripts and CI must
   use explicit selection flags or config replay.
 - Use explicit version managers or vendor installers only when Homebrew cannot

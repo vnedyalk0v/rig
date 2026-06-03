@@ -25,7 +25,8 @@ side-effect-free dry-run plans.
 - **Status:** Pre-release v1. The installer and `rig` command install workstation
   packages through Homebrew Bundle, external install plans, and macOS defaults scripts.
   Homebrew is checked before tool selection; interactive installs ask before
-  installing missing Homebrew, and non-interactive installs require `--yes`.
+  installing missing Homebrew, and non-interactive installs require `--yes` only
+  when Homebrew is missing and the command would install packages.
   Interactive installs show a final review before applying changes. Use
   `--dry-run` to preview with a summary and raw plan without changes.
 - **Source of truth:** [`docs/rig-v1-spec.md`](docs/rig-v1-spec.md). Read it
@@ -162,7 +163,8 @@ checks before opening or updating a PR.
 - Keep **dry-run side-effect free**: no installs, no `brew bundle`, no shell-file
   edits, no `~/.config/rig/` writes, no `defaults`, no LaunchAgents.
 - Never install Homebrew silently: interactive install must ask first, and
-  non-interactive install must require explicit `--yes`.
+  non-interactive install must require explicit `--yes` when Homebrew is
+  missing and installation would proceed.
 - Never let interactive prompts consume EOF and dump every category; prompt
   flows require a terminal, while scripts/CI use explicit selection flags.
 - Keep generated shell/config edits idempotent.
