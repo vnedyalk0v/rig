@@ -43,13 +43,25 @@ jobs:
           export RIG_CONFIG_DIR="$HOME/.config/rig"
           mkdir -p "$HOME"
 
+          assert_empty_stderr() {
+            local stderr_file
+            stderr_file=$1
+            if [ -s "$stderr_file" ]; then
+              cat "$stderr_file" >&2
+              return 1
+            fi
+            return 0
+          }
+
           for f in install.sh rig lib/rig/*.sh scripts/*.sh tests/*.sh; do
             bash -n "$f"
           done
           bash tests/run-tests.sh
           ./scripts/validate-catalog.sh
-          ./rig dry-run --select vscode,chrome,node-npm --defaults finder-show-hidden-files
-          ./install.sh --dry-run
+          ./rig dry-run --select vscode,chrome,node-npm --defaults finder-show-hidden-files 2>"$RUNNER_TEMP/rig-dry-run.stderr"
+          assert_empty_stderr "$RUNNER_TEMP/rig-dry-run.stderr"
+          ./install.sh --dry-run 2>"$RUNNER_TEMP/install-dry-run.stderr"
+          assert_empty_stderr "$RUNNER_TEMP/install-dry-run.stderr"
 
           test ! -e "$RIG_CONFIG_DIR"
           test ! -e "$HOME/.local/share/rig"
