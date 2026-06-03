@@ -57,12 +57,11 @@ clean retail machine.
 
 ## Recommended CI Shape
 
-Use layered checks instead of pretending one smoke test proves every install
-strategy.
+Use one required Apple Silicon smoke job that behaves like a cautious user:
+validate the repo first, preview with dry-run, then run one real mixed install
+in a temporary `HOME`.
 
-### 1. Required Apple Silicon Dry-Run Smoke
-
-Implemented as the `Apple Silicon dry-run smoke` job in
+Implemented as the `Apple Silicon smoke` job in
 `.github/workflows/apple-silicon-smoke.yml`. It runs on every pull request and
 push to `dev` / `main`, on a weekly schedule, and through `workflow_dispatch`
 for explicit reruns.
@@ -72,7 +71,11 @@ Purpose:
 - prove the shell runs on real macOS arm64;
 - prove dry-run stays side-effect free;
 - run the existing local validation surface, including regression tests that
-  cover temporary-home config generation.
+  cover temporary-home config generation;
+- prove `rig install --write-config-only` creates real config in a temp home;
+- prove `rig install --from-config` can replay Homebrew Bundle and an external
+  install plan on arm64;
+- prove installed tools are actually available after installation.
 
 Best practices:
 
@@ -84,11 +87,16 @@ Best practices:
 - do not use `pull_request_target`;
 - pin third-party actions to full commit SHAs;
 - set `persist-credentials: false` on `actions/checkout`;
-- set a short `timeout-minutes`, for example 20.
+- set a bounded `timeout-minutes`, for example 45.
 - do not use path filters if the job is configured as a required check, because
   skipped required checks can block pull requests.
 
-Useful command shape:
+The implemented job has two product phases.
+
+### Validation And Dry-Run
+
+Run syntax checks, the shell regression suite, catalog validation, side-effect
+free dry-runs, and whitespace checks:
 
 ```bash
 test "$(uname -s)" = "Darwin"
@@ -114,88 +122,34 @@ git diff --check
 ```
 
 If `shellcheck` or `actionlint` is not already present on the runner, install
-only those validation tools through Homebrew in the smoke job. Keep this
-separate from testing `rig` installs so validator setup does not hide product
-behavior.
+only those validation tools through Homebrew after the product install phase,
+so validator setup does not hide product behavior.
 
-Required CI intentionally uses dry-run product commands only. It does not run
-real `brew bundle` installs or replay external installers.
+### End-To-End Install
 
-### 2. Automatic Apple Silicon Formula Install Smoke
-
-Implemented as the `Apple Silicon install smoke` job in
-`.github/workflows/apple-silicon-smoke.yml`. It runs after the dry-run smoke on
-pull requests and pushes to `dev` / `main`, on the weekly schedule, and through
-`workflow_dispatch`.
-
-Purpose:
-
-- prove `rig install --write-config-only` creates real config in a temp home;
-- prove `rig install --from-config` can invoke Homebrew Bundle on arm64;
-- verify generated state is replayable.
-
-Keep the required install selection intentionally small. Do not use the catalog
-defaults for a real CI install, because the current defaults include GUI casks
-such as Visual Studio Code and Google Chrome. Prefer a formula-only selection:
+Use one mixed selection that simulates a real user choosing both a Homebrew
+formula and an external/version-managed tool:
 
 ```bash
-export HOME="$RUNNER_TEMP/rig-home"
-export RIG_CONFIG_DIR="$HOME/.config/rig"
-mkdir -p "$HOME"
-
-./rig install --write-config-only --select gh
-grep -F 'brew "gh"' "$RIG_CONFIG_DIR/Brewfile"
-./rig install --from-config
-brew bundle check --file="$RIG_CONFIG_DIR/Brewfile"
-gh --version
-```
-
-Use these environment settings to reduce Homebrew noise and accidental update
-work:
-
-```bash
-export HOMEBREW_NO_AUTO_UPDATE=1
-export HOMEBREW_NO_INSTALL_CLEANUP=1
-export RIG_SKIP_HOMEBREW_INSTALL=yes
-```
-
-`RIG_SKIP_HOMEBREW_INSTALL=yes` is appropriate for this runner path because
-GitHub macOS images already include Homebrew. It prevents the test from hiding
-a missing runner Homebrew setup by running the Homebrew installer.
-
-The implemented install smoke uses only the `gh` formula selection. It does not
-install GUI casks, Mac App Store apps, external installers, or Homebrew
-auto-update state.
-
-### 3. Automatic Apple Silicon External Installer Smoke
-
-Implemented as the `Apple Silicon external installer smoke` job in
-`.github/workflows/apple-silicon-smoke.yml`. It runs automatically on the same
-pull request, push, schedule, and explicit rerun triggers as the other Apple
-Silicon jobs.
-
-Purpose:
-
-- prove a real non-Homebrew installer path through `install-plan.tsv`;
-- verify `rig install --from-config` replays that plan in a temporary `HOME`;
-- prove the resulting tool binaries are actually available after installation;
-- verify shell profile initialization is written for version-manager tools.
-
-The current external smoke uses the nvm-backed Node.js/npm path because it is a
-core v1 behavior and avoids GUI casks, App Store authentication, and background
-Homebrew auto-update state:
-
-```bash
-export HOME="$RUNNER_TEMP/rig-external-home"
+export HOME="$RUNNER_TEMP/rig-e2e-home"
 export RIG_CONFIG_DIR="$HOME/.config/rig"
 export NVM_DIR="$HOME/.nvm"
 export RIG_LOGIN_SHELL=/bin/bash
+export HOMEBREW_NO_AUTO_UPDATE=1
+export HOMEBREW_NO_INSTALL_CLEANUP=1
+export RIG_SKIP_HOMEBREW_INSTALL=yes
 mkdir -p "$HOME"
 
-./rig install --write-config-only --select node-npm=lts
+brew uninstall --formula --ignore-dependencies gh || true
+./rig install --write-config-only --select gh,node-npm=lts
+grep -F 'brew "gh"' "$RIG_CONFIG_DIR/Brewfile"
 grep -F $'node-npm\tnvm\tnvm\tlts\tNode.js/npm' "$RIG_CONFIG_DIR/install-plan.tsv"
 
 ./rig install --from-config
+brew bundle check --file="$RIG_CONFIG_DIR/Brewfile"
+brew list --formula gh
+gh --version
+
 test -s "$NVM_DIR/nvm.sh"
 test -f "$HOME/.bash_profile"
 grep -F '# >>> rig managed >>>' "$HOME/.bash_profile"
@@ -207,10 +161,17 @@ node --version
 npm --version
 ```
 
-This still does not prove every external installer. Add one focused scheduled
-or required job per installer strategy only when the catalog and implementation
-have enough stable behavior to justify the extra runtime and network surface.
-Good future candidates are:
+This does not prove every catalog item. It intentionally proves one complete
+representative flow:
+
+- generated `Brewfile`;
+- generated `install-plan.tsv`;
+- `brew bundle` replay;
+- external nvm replay;
+- shell profile initialization;
+- installed binaries available after replay.
+
+Good future scheduled or explicit rerun candidates are:
 
 - Bun path: `./rig install --write-config-only --select bun`, then verify
   `$HOME/.bun/bin/bun --version`.
@@ -223,20 +184,17 @@ runner check. Keep auto-update coverage mocked.
 
 ## Implemented Workflows
 
-- `.github/workflows/apple-silicon-smoke.yml` runs `Apple Silicon dry-run
-  smoke`, `Apple Silicon install smoke`, and `Apple Silicon external installer
-  smoke` on `macos-15` for pull requests, pushes, the weekly schedule, and
-  explicit reruns.
+- `.github/workflows/apple-silicon-smoke.yml` runs `Apple Silicon smoke` on
+  `macos-15` for pull requests, pushes, the weekly schedule, and explicit
+  reruns.
 
 The workflow uses a pinned `actions/checkout` commit, sets
 `persist-credentials: false`, and keeps `permissions: contents: read`.
 
-After the workflow lands on `dev` and each job has reported at least once, the
-rulesets should require these job names:
+After the workflow lands on `dev` and the job has reported at least once, the
+rulesets should require this job name:
 
-- `Apple Silicon dry-run smoke`
-- `Apple Silicon install smoke`
-- `Apple Silicon external installer smoke`
+- `Apple Silicon smoke`
 
 ## Operational Guardrails
 

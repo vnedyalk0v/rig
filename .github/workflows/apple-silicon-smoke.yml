@@ -17,13 +17,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  dry-run-smoke:
-    name: Apple Silicon dry-run smoke
+  smoke:
+    name: Apple Silicon smoke
     runs-on: macos-15
-    timeout-minutes: 20
+    timeout-minutes: 45
     env:
       HOMEBREW_NO_AUTO_UPDATE: "1"
       HOMEBREW_NO_INSTALL_CLEANUP: "1"
+      RIG_SKIP_HOMEBREW_INSTALL: "yes"
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -37,7 +38,7 @@ jobs:
           sw_vers
           /bin/bash --version | head -n 1
 
-      - name: Run rig smoke checks
+      - name: Run validation and dry-run checks
         run: |
           export HOME="$RUNNER_TEMP/rig-dry-run-home"
           export RIG_CONFIG_DIR="$HOME/.config/rig"
@@ -69,89 +70,31 @@ jobs:
 
           git diff --check
 
-      - name: Install validation tools
+      - name: Run end-to-end install
         run: |
-          if ! command -v shellcheck >/dev/null 2>&1; then
-            brew install shellcheck
-          fi
-          if ! command -v actionlint >/dev/null 2>&1; then
-            brew install actionlint
-          fi
-
-      - name: Run validation tools
-        run: |
-          shellcheck install.sh rig lib/rig/*.sh scripts/*.sh tests/*.sh
-          actionlint .github/workflows/*.yml
-
-  install-smoke:
-    name: Apple Silicon install smoke
-    needs: dry-run-smoke
-    runs-on: macos-15
-    timeout-minutes: 30
-    env:
-      HOMEBREW_NO_AUTO_UPDATE: "1"
-      HOMEBREW_NO_INSTALL_CLEANUP: "1"
-      RIG_SKIP_HOMEBREW_INSTALL: "yes"
-    steps:
-      - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-        with:
-          persist-credentials: false
-
-      - name: Verify Apple Silicon runner
-        run: |
-          test "$(uname -s)" = "Darwin"
-          test "$(uname -m)" = "arm64"
-          sw_vers
-          /bin/bash --version | head -n 1
-
-      - name: Run formula-only install smoke
-        run: |
-          export HOME="$RUNNER_TEMP/rig-home"
-          export RIG_CONFIG_DIR="$HOME/.config/rig"
-          mkdir -p "$HOME"
-
-          ./rig install --write-config-only --select gh
-          grep -F 'brew "gh"' "$RIG_CONFIG_DIR/Brewfile"
-
-          ./rig install --from-config
-          brew bundle check --file="$RIG_CONFIG_DIR/Brewfile"
-          gh --version
-
-  external-installer-smoke:
-    name: Apple Silicon external installer smoke
-    needs: dry-run-smoke
-    runs-on: macos-15
-    timeout-minutes: 30
-    env:
-      HOMEBREW_NO_AUTO_UPDATE: "1"
-      HOMEBREW_NO_INSTALL_CLEANUP: "1"
-      RIG_SKIP_HOMEBREW_INSTALL: "yes"
-    steps:
-      - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-        with:
-          persist-credentials: false
-
-      - name: Verify Apple Silicon runner
-        run: |
-          test "$(uname -s)" = "Darwin"
-          test "$(uname -m)" = "arm64"
-          sw_vers
-          /bin/bash --version | head -n 1
-
-      - name: Run nvm install smoke
-        run: |
-          export HOME="$RUNNER_TEMP/rig-external-home"
+          export HOME="$RUNNER_TEMP/rig-e2e-home"
           export RIG_CONFIG_DIR="$HOME/.config/rig"
           export NVM_DIR="$HOME/.nvm"
           export RIG_LOGIN_SHELL=/bin/bash
           mkdir -p "$HOME"
 
-          ./rig install --write-config-only --select node-npm=lts
+          if brew list --formula gh >/dev/null 2>&1; then
+            brew uninstall --formula --ignore-dependencies gh
+          fi
+          if brew list --formula gh >/dev/null 2>&1; then
+            printf 'gh formula is still installed before rig install\n' >&2
+            exit 1
+          fi
+
+          ./rig install --write-config-only --select gh,node-npm=lts
+          grep -F 'brew "gh"' "$RIG_CONFIG_DIR/Brewfile"
           grep -F $'node-npm\tnvm\tnvm\tlts\tNode.js/npm' "$RIG_CONFIG_DIR/install-plan.tsv"
 
           ./rig install --from-config
+          brew bundle check --file="$RIG_CONFIG_DIR/Brewfile"
+          brew list --formula gh
+          gh --version
+
           test -s "$NVM_DIR/nvm.sh"
           test -f "$HOME/.bash_profile"
           grep -F '# >>> rig managed >>>' "$HOME/.bash_profile"
@@ -173,3 +116,17 @@ jobs:
             "$NVM_DIR"/*) ;;
             *) printf 'npm resolved outside nvm: %s\n' "$npm_path" >&2; exit 1 ;;
           esac
+
+      - name: Install validation tools
+        run: |
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            brew install shellcheck
+          fi
+          if ! command -v actionlint >/dev/null 2>&1; then
+            brew install actionlint
+          fi
+
+      - name: Run validation tools
+        run: |
+          shellcheck install.sh rig lib/rig/*.sh scripts/*.sh tests/*.sh
+          actionlint .github/workflows/*.yml
