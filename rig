@@ -63,6 +63,7 @@ rig_self_update() {
     rig_print_error "git is required for self-update"
     return 1
   fi
+  rig_validate_clone_origin "$RIG_ROOT" || return 1
 
   (
     cd "$RIG_ROOT" || exit 1

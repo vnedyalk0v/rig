@@ -177,6 +177,26 @@ run_capture "$out" ./scripts/validate-catalog.sh --tools "$missing_description"
 assert_failure "$?" "catalog validation rejects missing descriptions"
 assert_contains "$out" "description is required" "missing description is reported"
 
+interpolated_package_catalog="$TEST_TMP/interpolated-package-tools.tsv"
+{
+  printf 'category\tid\tlabel\tkind\tpackage\tdefault\tdescription\tversion_strategy\tversions\tnotes\n'
+  printf 'devops\tevil-brew\tEvil Brew\tformula\tevil#{system("touch /tmp/rig-pwned")}\tno\tBad package\thomebrew-latest\t\t\n'
+} >"$interpolated_package_catalog"
+out="$TEST_TMP/catalog-interpolated-package.out"
+run_capture "$out" ./scripts/validate-catalog.sh --tools "$interpolated_package_catalog"
+assert_failure "$?" "catalog validation rejects Ruby interpolation in Brewfile package fields"
+assert_contains "$out" "invalid Brewfile package" "interpolated package is reported"
+
+raw_defaults_catalog="$TEST_TMP/raw-command-defaults.tsv"
+{
+  printf 'id\tlabel\tdescription\tcommand\trestart_hint\n'
+  printf 'evil-default\tEvil Default\tRuns shell\tdate > /tmp/rig-defaults-pwned\t\n'
+} >"$raw_defaults_catalog"
+out="$TEST_TMP/catalog-raw-defaults.out"
+run_capture "$out" ./scripts/validate-catalog.sh --defaults "$raw_defaults_catalog"
+assert_failure "$?" "catalog validation rejects raw macOS defaults command catalogs"
+assert_contains "$out" "invalid macOS defaults catalog header" "raw defaults command schema is reported"
+
 out="$TEST_TMP/version.out"
 run_capture "$out" ./rig version
 assert_success "$?" "rig version succeeds"
@@ -202,12 +222,13 @@ assert_contains "$out" "External installers: 1" "dry-run summary counts external
 assert_contains "$out" "macOS defaults: 1" "dry-run summary counts macOS defaults"
 assert_contains "$out" "Shell/profile edits: 1" "dry-run summary counts shell edits"
 assert_contains "$out" "# Brewfile preview" "dry-run prints Brewfile section"
-assert_contains "$out" "cask \"visual-studio-code\"" "dry-run includes VS Code cask"
-assert_contains "$out" "cask \"google-chrome\"" "dry-run includes Chrome cask"
+assert_contains "$out" "cask 'visual-studio-code'" "dry-run includes VS Code cask"
+assert_contains "$out" "cask 'google-chrome'" "dry-run includes Chrome cask"
+assert_not_contains "$out" '#{' "dry-run Brewfile preview does not expose Ruby interpolation"
 assert_contains "$out" "# External install plan preview" "dry-run prints external plan section"
 assert_contains "$out" "node-npm	nvm	latest	Node.js/npm" "dry-run includes Node external plan"
 assert_contains "$out" "# macOS defaults preview" "dry-run prints macOS defaults section"
-assert_contains "$out" "defaults write com.apple.finder AppleShowAllFiles -bool true" "dry-run includes selected Finder default"
+assert_contains "$out" "defaults write 'com.apple.finder' 'AppleShowAllFiles' -bool true" "dry-run includes selected Finder default"
 assert_contains "$out" "# Shell/profile edits preview" "dry-run prints shell edits section"
 
 tap_tools_catalog="$TEST_TMP/tap-tools.tsv"
@@ -218,15 +239,15 @@ tap_tools_catalog="$TEST_TMP/tap-tools.tsv"
 out="$TEST_TMP/dry-run-tap-formula-summary.out"
 PATH="$fake_darwin_bin:$PATH" RIG_TOOLS_CATALOG="$tap_tools_catalog" run_capture "$out" ./rig dry-run --select tap-tool
 assert_success "$?" "rig dry-run succeeds with tap-formula tool"
-assert_contains "$out" "tap \"owner/tap\"" "dry-run includes tap for tap-formula tool"
-assert_contains "$out" "brew \"tool\"" "dry-run includes formula for tap-formula tool"
+assert_contains "$out" "tap 'owner/tap'" "dry-run includes tap for tap-formula tool"
+assert_contains "$out" "brew 'tool'" "dry-run includes formula for tap-formula tool"
 assert_contains "$out" "Homebrew-native packages: 1" "dry-run summary counts tap-formula as one package"
 
 out="$TEST_TMP/dry-run-non-macos.out"
 PATH="$fake_linux_bin:$PATH" RIG_LOGIN_SHELL=/bin/zsh run_capture "$out" ./rig dry-run --select vscode
 assert_failure "$?" "rig dry-run fails clearly on non-macOS"
 assert_contains "$out" "rig supports macOS only; detected Linux" "dry-run reports macOS-only guard"
-assert_not_contains "$out" "cask \"visual-studio-code\"" "dry-run does not render a plan on non-macOS"
+assert_not_contains "$out" "cask 'visual-studio-code'" "dry-run does not render a plan on non-macOS"
 
 out="$TEST_TMP/dry-run-repeated-select.out"
 PATH="$fake_darwin_bin:$PATH" run_capture "$out" ./rig dry-run --select vscode --select chrome
@@ -256,7 +277,7 @@ assert_contains "$out" "unknown category: does-not-exist" "unknown dry-run categ
 out="$TEST_TMP/install-dry-run.out"
 PATH="$fake_darwin_bin:$PATH" run_capture "$out" ./rig install --dry-run --select vscode
 assert_success "$?" "rig install --dry-run succeeds"
-assert_contains "$out" "cask \"visual-studio-code\"" "install --dry-run delegates to dry-run"
+assert_contains "$out" "cask 'visual-studio-code'" "install --dry-run delegates to dry-run"
 
 out="$TEST_TMP/install-dry-run-non-tty.out"
 non_tty_home="$TEST_TMP/install-dry-run-non-tty-home"
@@ -424,7 +445,7 @@ out="$TEST_TMP/install-dry-run-non-macos.out"
 PATH="$fake_linux_bin:$PATH" RIG_LOGIN_SHELL=/bin/zsh run_capture "$out" ./rig install --dry-run --select vscode
 assert_failure "$?" "rig install --dry-run fails clearly on non-macOS"
 assert_contains "$out" "rig supports macOS only; detected Linux" "install --dry-run reports macOS-only guard"
-assert_not_contains "$out" "cask \"visual-studio-code\"" "install --dry-run does not render a plan on non-macOS"
+assert_not_contains "$out" "cask 'visual-studio-code'" "install --dry-run does not render a plan on non-macOS"
 
 out="$TEST_TMP/install-write-config.out"
 config_home="$TEST_TMP/config-home"
@@ -438,7 +459,7 @@ assert_success "$([ -f "$config_home/.config/rig/macos-defaults.sh" ] && echo 0 
 
 brewfile_content=$(cat "$config_home/.config/rig/Brewfile")
 case "$brewfile_content" in
-  *'cask "visual-studio-code"'*) pass "Brewfile contains VS Code" ;;
+  *"cask 'visual-studio-code'"*) pass "Brewfile contains VS Code" ;;
   *) fail "Brewfile contains VS Code" ;;
 esac
 
@@ -464,6 +485,25 @@ printf '#!/bin/bash\n' >"$apply_home/.config/rig/macos-defaults.sh"
 PATH="$fake_darwin_bin:$fake_brew_bin:$PATH" HOME="$apply_home" RIG_CONFIG_DIR="$apply_home/.config/rig" RIG_SKIP_HOMEBREW_INSTALL=yes run_capture "$out" ./rig install --from-config
 assert_success "$?" "rig install --from-config succeeds with mock brew"
 assert_contains "$fake_brew_log" "bundle install --file=" "from-config invokes brew bundle"
+
+tampered_defaults_home="$TEST_TMP/tampered-defaults-home"
+tampered_defaults_marker="$TEST_TMP/tampered-defaults-marker"
+mkdir -p "$tampered_defaults_home/.config/rig"
+: >"$tampered_defaults_home/.config/rig/Brewfile"
+printf 'id\tstrategy\tpackage\tversion\tlabel\n' >"$tampered_defaults_home/.config/rig/install-plan.tsv"
+{
+  printf '#!/bin/bash\n'
+  printf 'touch "%s"\n' "$tampered_defaults_marker"
+} >"$tampered_defaults_home/.config/rig/macos-defaults.sh"
+out="$TEST_TMP/install-from-config-tampered-defaults.out"
+PATH="$fake_darwin_bin:$fake_brew_bin:$PATH" HOME="$tampered_defaults_home" RIG_CONFIG_DIR="$tampered_defaults_home/.config/rig" RIG_SKIP_HOMEBREW_INSTALL=yes run_capture "$out" ./rig install --from-config
+assert_failure "$?" "rig install --from-config rejects tampered macOS defaults scripts"
+assert_contains "$out" "unsupported macOS defaults command" "tampered defaults script is reported"
+if [ -e "$tampered_defaults_marker" ]; then
+  fail "tampered macOS defaults script is not executed"
+else
+  pass "tampered macOS defaults script is not executed"
+fi
 
 override_home="$TEST_TMP/override-home"
 override_config="$TEST_TMP/override-config"
@@ -684,7 +724,7 @@ PATH="$fake_darwin_bin:$PATH" RIG_ROOT="$ROOT_DIR" bash -c '
   }
   rig_lookup_default() {
     d=$RIG_TSV_DELIMITER
-    printf "evil-default%sBad%s[2JDefault%sDesc%sdefaults write test key value%s\n" "$d" "$esc" "$d" "$d" "$d"
+    printf "evil-default%sBad%s[2JDefault%sDesc%scom.example%sKey%sbool%strue%s\n" "$d" "$esc" "$d" "$d" "$d" "$d" "$d" "$d"
   }
   rig_prompt_print_review_tools "$(printf "evil\n")"
   rig_prompt_print_review_defaults "$(printf "evil-default\n")"
@@ -864,6 +904,9 @@ bootstrap_success_home="$TEST_TMP/bootstrap-success-home"
 mkdir -p "$bootstrap_git_bin" "$bootstrap_success_home"
 cat >"$bootstrap_git_bin/git" <<EOF
 #!/bin/bash
+if [ "\$1" = "-C" ]; then
+  shift 2
+fi
 printf '%s\n' "\$*" >>"$bootstrap_git_log"
 case "\$1" in
   clone)
@@ -872,7 +915,7 @@ case "\$1" in
     cp -R "$ROOT_DIR/rig" "$ROOT_DIR/lib" "$ROOT_DIR/catalog" "\$dest/" || exit 1
     exit 0
     ;;
-  fetch|checkout|pull)
+  config|fetch|checkout|pull)
     exit 0
     ;;
 esac
@@ -902,6 +945,95 @@ assert_contains "$out" "Review selection" "bootstrap install flow shows final re
 assert_contains "$out" "Wrote rig config" "bootstrap install flow writes config"
 assert_success "$([ -L "$bootstrap_success_home/.local/bin/rig" ] && echo 0 || echo 1)" "bootstrap creates rig symlink"
 assert_contains "$bootstrap_git_log" "clone" "bootstrap invokes git clone"
+
+bootstrap_mismatch_git_bin="$TEST_TMP/bootstrap-mismatch-git-bin"
+bootstrap_mismatch_git_log="$TEST_TMP/bootstrap-mismatch-git.log"
+bootstrap_mismatch_home="$TEST_TMP/bootstrap-mismatch-home"
+bootstrap_mismatch_marker="$TEST_TMP/bootstrap-mismatch-marker"
+mkdir -p "$bootstrap_mismatch_git_bin" "$bootstrap_mismatch_home/.local/share/rig/.git"
+cat >"$bootstrap_mismatch_git_bin/git" <<EOF
+#!/bin/bash
+if [ "\$1" = "-C" ]; then
+  shift 2
+fi
+printf '%s\n' "\$*" >>"$bootstrap_mismatch_git_log"
+case "\$1:\$2:\$3" in
+  remote:get-url:origin)
+    printf 'file:///tmp/evil-rig.git\n'
+    exit 0
+    ;;
+  config:--get:rig.expectedOrigin)
+    printf 'https://github.com/vnedyalk0v/rig.git\n'
+    exit 0
+    ;;
+esac
+case "\$1" in
+  fetch|checkout|pull|config)
+    exit 0
+    ;;
+esac
+exit 0
+EOF
+chmod +x "$bootstrap_mismatch_git_bin/git"
+cat >"$bootstrap_mismatch_home/.local/share/rig/rig" <<EOF
+#!/bin/bash
+touch "$bootstrap_mismatch_marker"
+exit 0
+EOF
+chmod +x "$bootstrap_mismatch_home/.local/share/rig/rig"
+out="$TEST_TMP/bootstrap-existing-origin-mismatch.out"
+rm -f "$bootstrap_mismatch_git_log" "$bootstrap_mismatch_marker"
+HOME="$bootstrap_mismatch_home" PATH="$fake_darwin_bin:$bootstrap_mismatch_git_bin:/usr/bin:/bin" run_capture "$out" ./install.sh
+assert_failure "$?" "install.sh rejects existing clone origin mismatches"
+assert_contains "$out" "existing rig clone origin mismatch" "bootstrap origin mismatch is reported"
+assert_not_contains "$bootstrap_mismatch_git_log" "fetch" "bootstrap origin mismatch does not fetch"
+if [ -e "$bootstrap_mismatch_marker" ]; then
+  fail "bootstrap origin mismatch does not execute existing rig"
+else
+  pass "bootstrap origin mismatch does not execute existing rig"
+fi
+
+bootstrap_match_git_bin="$TEST_TMP/bootstrap-match-git-bin"
+bootstrap_match_git_log="$TEST_TMP/bootstrap-match-git.log"
+bootstrap_match_home="$TEST_TMP/bootstrap-match-home"
+bootstrap_match_marker="$TEST_TMP/bootstrap-match-marker"
+mkdir -p "$bootstrap_match_git_bin" "$bootstrap_match_home/.local/share/rig/.git"
+cat >"$bootstrap_match_git_bin/git" <<EOF
+#!/bin/bash
+if [ "\$1" = "-C" ]; then
+  shift 2
+fi
+printf '%s\n' "\$*" >>"$bootstrap_match_git_log"
+case "\$1:\$2:\$3" in
+  remote:get-url:origin)
+    printf 'git@github.com:vnedyalk0v/rig.git\n'
+    exit 0
+    ;;
+esac
+case "\$1" in
+  config|fetch|checkout|pull)
+    exit 0
+    ;;
+esac
+exit 0
+EOF
+chmod +x "$bootstrap_match_git_bin/git"
+cat >"$bootstrap_match_home/.local/share/rig/rig" <<EOF
+#!/bin/bash
+touch "$bootstrap_match_marker"
+exit 0
+EOF
+chmod +x "$bootstrap_match_home/.local/share/rig/rig"
+out="$TEST_TMP/bootstrap-existing-origin-match.out"
+rm -f "$bootstrap_match_git_log" "$bootstrap_match_marker"
+HOME="$bootstrap_match_home" PATH="$fake_darwin_bin:$bootstrap_match_git_bin:/usr/bin:/bin" run_capture "$out" ./install.sh --repo-url https://github.com/vnedyalk0v/rig.git
+assert_success "$?" "install.sh accepts existing clone when canonical origins match"
+assert_contains "$bootstrap_match_git_log" "fetch origin main" "bootstrap matching origin fetches"
+if [ -e "$bootstrap_match_marker" ]; then
+  pass "bootstrap matching origin executes rig"
+else
+  fail "bootstrap matching origin executes rig"
+fi
 
 out="$TEST_TMP/shell-managed-block.out"
 shell_profile="$TEST_TMP/shell-managed.zshrc"
@@ -957,7 +1089,7 @@ PATH="$fake_darwin_bin:$PATH" RIG_ROOT="$ROOT_DIR" RIG_LOGIN_SHELL=/bin/zsh bash
   rig_emit_brewfile_content "$selected"
 ' >"$TEST_TMP/emit-brewfile.out" 2>&1
 assert_success "$?" "emit brewfile helper succeeds"
-assert_contains "$TEST_TMP/emit-brewfile.out" "cask \"visual-studio-code\"" "emit helper includes VS Code"
+assert_contains "$TEST_TMP/emit-brewfile.out" "cask 'visual-studio-code'" "emit helper includes VS Code"
 
 out="$TEST_TMP/shell-edit-detection.out"
 PATH="$fake_darwin_bin:$PATH" RIG_LOGIN_SHELL=/bin/zsh run_capture "$out" ./rig dry-run --select node-npm
@@ -1039,6 +1171,75 @@ if [ -e "$fake_git_log" ]; then
 else
   pass "rig self-update non-macOS guard does not invoke git"
 fi
+
+self_update_mismatch_git_bin="$TEST_TMP/self-update-mismatch-git-bin"
+self_update_mismatch_git_log="$TEST_TMP/self-update-mismatch-git.log"
+mkdir -p "$self_update_mismatch_git_bin"
+cat >"$self_update_mismatch_git_bin/git" <<EOF
+#!/bin/bash
+if [ "\$1" = "-C" ]; then
+  shift 2
+fi
+printf '%s\n' "\$*" >>"$self_update_mismatch_git_log"
+case "\$1:\$2:\$3" in
+  config:--get:rig.expectedOrigin)
+    printf 'https://github.com/vnedyalk0v/rig.git\n'
+    exit 0
+    ;;
+  remote:get-url:origin)
+    printf 'file:///tmp/evil-rig.git\n'
+    exit 0
+    ;;
+esac
+case "\$1" in
+  fetch|pull)
+    exit 0
+    ;;
+esac
+exit 0
+EOF
+chmod +x "$self_update_mismatch_git_bin/git"
+out="$TEST_TMP/self-update-origin-mismatch.out"
+rm -f "$self_update_mismatch_git_log"
+PATH="$fake_darwin_bin:$self_update_mismatch_git_bin:$PATH" run_capture "$out" ./rig self-update
+assert_failure "$?" "rig self-update rejects origin mismatches"
+assert_contains "$out" "rig clone origin mismatch" "self-update origin mismatch is reported"
+assert_not_contains "$self_update_mismatch_git_log" "fetch" "self-update origin mismatch does not fetch"
+assert_not_contains "$self_update_mismatch_git_log" "pull" "self-update origin mismatch does not pull"
+
+self_update_match_git_bin="$TEST_TMP/self-update-match-git-bin"
+self_update_match_git_log="$TEST_TMP/self-update-match-git.log"
+mkdir -p "$self_update_match_git_bin"
+cat >"$self_update_match_git_bin/git" <<EOF
+#!/bin/bash
+if [ "\$1" = "-C" ]; then
+  shift 2
+fi
+printf '%s\n' "\$*" >>"$self_update_match_git_log"
+case "\$1:\$2:\$3" in
+  config:--get:rig.expectedOrigin)
+    printf 'https://github.com/vnedyalk0v/rig.git\n'
+    exit 0
+    ;;
+  remote:get-url:origin)
+    printf 'git@github.com:vnedyalk0v/rig.git\n'
+    exit 0
+    ;;
+esac
+case "\$1" in
+  fetch|pull)
+    exit 0
+    ;;
+esac
+exit 0
+EOF
+chmod +x "$self_update_match_git_bin/git"
+out="$TEST_TMP/self-update-origin-match.out"
+rm -f "$self_update_match_git_log"
+PATH="$fake_darwin_bin:$self_update_match_git_bin:$PATH" run_capture "$out" ./rig self-update
+assert_success "$?" "rig self-update accepts canonical matching origins"
+assert_contains "$self_update_match_git_log" "fetch origin" "self-update matching origin fetches"
+assert_contains "$self_update_match_git_log" "pull --ff-only" "self-update matching origin pulls"
 
 if [ "$(uname -s 2>/dev/null)" = "Darwin" ]; then
   doctor_home="$TEST_TMP/readonly-home"

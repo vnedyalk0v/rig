@@ -92,7 +92,11 @@ The remote bootstrap script should only do the minimum:
   before installing it; non-interactive installs require explicit `--yes`.
   Dry-run mode prints the same prerequisite decision path without installing
   Homebrew.
-- Clone or update the bootstrap repo under the user's home directory, except in dry-run mode.
+- Clone or update the bootstrap repo under the user's home directory, except
+  in dry-run mode. Existing clones must have an `origin` that canonically
+  matches the requested or default GitHub repository before any fetch, pull, or
+  local `rig` execution. The trusted origin is recorded in the local clone for
+  later self-update validation.
 - Add or suggest a command path such as `~/.local/bin/rig`, except in dry-run mode.
 - Start the interactive installer, or print the equivalent planned steps in dry-run mode.
 
@@ -160,6 +164,11 @@ The interactive tool collects the user's choices and generates the canonical `Br
 
 Some requested developer and AI tools may need a versioned installer, an npm/Bun-based installer, or a vendor-specific installer instead of a plain Brewfile entry. Those items still live in the same catalog, but their install strategy must be explicit and auditable. v1 should prefer Homebrew/Brewfile-native installation when available; if a tool cannot be installed that way, `rig` records and displays the separate install step and includes it in dry-run output.
 
+Generated Brewfile entries use non-interpolating Ruby string forms and strict
+catalog validation for Brewfile-native package names and labels. Catalog data
+must not be able to introduce Ruby interpolation or other executable Brewfile
+DSL content.
+
 ## Version Manager Strategy
 
 Homebrew Bundle is not a version lockfile. It can install current formulae/casks and avoid upgrades with `--no-upgrade`, but it does not provide arbitrary package-version selection. Tools where the user naturally expects "latest or a specific version" need dedicated version-management behavior:
@@ -177,7 +186,11 @@ Reproducibility is the core value of a bootstrap tool. A `Brewfile` is the de-fa
 
 - **Brewfile (canonical for packages):** Selected formulae, casks, Mac App Store apps, and VS Code extensions are written to a `Brewfile`. This is the source of truth for packages, restored on any machine with `brew bundle --file=~/.config/rig/Brewfile`.
 - **External install plan:** Selected tools that cannot be represented in a Brewfile are written to a separate, auditable install-plan file with the chosen install strategy and version. `rig` replays that file after the Brewfile step and includes it in dry-run output.
-- **macOS preferences script:** The chosen opt-in tweaks are written to a re-runnable, idempotent `macos-defaults.sh` (a `Brewfile` cannot represent `defaults write` settings).
+- **macOS preferences script:** The chosen opt-in tweaks are written to a
+  re-runnable, idempotent `macos-defaults.sh` (a `Brewfile` cannot represent
+  `defaults write` settings). The script is generated from structured catalog
+  fields, not raw shell command text, and replay rejects non-generated command
+  shapes before executing the script.
 
 `rig` orchestrates these files during install. The user can commit them to their own dotfiles repo and replay them on a brand-new machine. v1 manages a single configuration per machine; multiple named profiles are out of scope.
 
@@ -272,6 +285,16 @@ macOS stores most settings in a database changed via `defaults write` (and `kill
 
 Anything that changes deeper system behavior is deferred. Every tweak must be explicitly chosen by the user, and the chosen tweaks are written to the re-runnable `macos-defaults.sh` described under Reproducibility.
 
+The macOS defaults catalog is structured as:
+
+```text
+id	label	description	domain	key	type	value	restart_hint
+```
+
+v1 supports `type=bool` with `value=true|false`. `rig` renders these rows from
+fixed `defaults write '<domain>' '<key>' -bool <value>` templates plus the
+allowlisted Finder/Dock restart commands.
+
 ## Self-Update
 
 The tool lives locally after the first run, preferably under:
@@ -300,7 +323,11 @@ rig update-tools
 rig version
 ```
 
-`rig self-update` updates only the bootstrap tool itself, normally by running a fast-forward-only Git pull in the local clone. `rig update-tools` updates installed packages separately through Homebrew.
+`rig self-update` updates only the bootstrap tool itself, normally by running a
+fast-forward-only Git pull in the local clone. Before fetching, it verifies the
+clone `origin` against the trusted origin recorded by bootstrap, falling back
+to the default public GitHub repository for existing pre-record clones.
+`rig update-tools` updates installed packages separately through Homebrew.
 
 Keeping these separate avoids surprising users. Updating the installer script and upgrading all workstation software are different operations.
 
