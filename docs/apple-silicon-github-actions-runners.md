@@ -152,7 +152,7 @@ mkdir -p "$HOME"
 
 brew uninstall --formula --ignore-dependencies gh || true
 ./rig install --write-config-only --select gh,node-npm=lts
-grep -F 'brew "gh"' "$RIG_CONFIG_DIR/Brewfile"
+grep -F "brew 'gh'" "$RIG_CONFIG_DIR/Brewfile"
 grep -F $'node-npm\tnvm\tnvm\tlts\tNode.js/npm' "$RIG_CONFIG_DIR/install-plan.tsv"
 
 ./rig install --from-config

@@ -286,22 +286,22 @@ rig_render_brewfile_line() {
 
   case "$kind" in
     formula)
-      printf 'brew "%s"\n' "$(rig_escape_brew_string "$package")"
+      printf "brew '%s'\n" "$(rig_escape_brew_string "$package")"
       ;;
     cask)
-      printf 'cask "%s"\n' "$(rig_escape_brew_string "$package")"
+      printf "cask '%s'\n" "$(rig_escape_brew_string "$package")"
       ;;
     mas)
-      printf 'mas "%s", id: %s\n' "$(rig_escape_brew_string "$label")" "$package"
+      printf "mas '%s', id: %s\n" "$(rig_escape_brew_string "$label")" "$package"
       ;;
     vscode)
-      printf 'vscode "%s"\n' "$(rig_escape_brew_string "$package")"
+      printf "vscode '%s'\n" "$(rig_escape_brew_string "$package")"
       ;;
     tap-formula)
       tap_name=$(rig_escape_brew_string "${package%/*}")
       formula_name=$(rig_escape_brew_string "${package##*/}")
-      printf 'tap "%s"\n' "$tap_name"
-      printf 'brew "%s"\n' "$formula_name"
+      printf "tap '%s'\n" "$tap_name"
+      printf "brew '%s'\n" "$formula_name"
       ;;
   esac
 }
@@ -359,7 +359,7 @@ rig_emit_install_plan_preview() {
 }
 
 rig_emit_macos_defaults() {
-  local selected_defaults mode selected_default row _id _label _description command_text restart_hint restart_cmds
+  local selected_defaults mode selected_default row _id _label _description domain key value_type value restart_hint restart_cmds
   selected_defaults=$1
   mode=$2
   restart_cmds=
@@ -372,8 +372,12 @@ rig_emit_macos_defaults() {
       continue
     fi
     row=$(rig_lookup_default "$selected_default")
-    IFS="$RIG_TSV_DELIMITER" read -r _id _label _description command_text restart_hint < <(printf '%s\n' "$row")
-    printf '%s\n' "$command_text"
+    IFS="$RIG_TSV_DELIMITER" read -r _id _label _description domain key value_type value restart_hint < <(printf '%s\n' "$row")
+    case "$value_type" in
+      bool)
+        printf "defaults write '%s' '%s' -bool %s\n" "$domain" "$key" "$value"
+        ;;
+    esac
     if [ "$mode" = "script" ]; then
       case "$restart_hint" in
         *Finder*)
@@ -703,6 +707,9 @@ rig_write_plan_config() {
   brewfile_content=$(rig_emit_brewfile_content "$RIG_PLAN_SELECTED_TOOLS")
   install_plan_content=$(rig_emit_install_plan_content "$RIG_PLAN_SELECTED_TOOLS" "$RIG_PLAN_VERSION_MAP")
   defaults_content=$(rig_emit_macos_defaults_script "$RIG_PLAN_SELECTED_DEFAULTS")
+  if ! printf '%s\n' "$defaults_content" | rig_validate_generated_defaults_content; then
+    return 1
+  fi
 
   rig_config_write_atomic "$brewfile_path" "$brewfile_content" || return 1
   rig_config_write_atomic "$plan_path" "$install_plan_content" || return 1

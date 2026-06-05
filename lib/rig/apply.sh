@@ -153,6 +153,7 @@ rig_apply_macos_defaults() {
   if [ ! -s "$script_path" ]; then
     return 0
   fi
+  rig_validate_generated_defaults_script "$script_path" || return 1
   bash "$script_path"
 }
 

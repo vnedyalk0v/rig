@@ -496,7 +496,7 @@ rig_prompt_version() {
 rig_prompt_defaults() {
   local items selected default_id safe_default_label safe_default_description
   items=
-  while IFS="$RIG_TSV_DELIMITER" read -r id label description _command _restart; do
+  while IFS="$RIG_TSV_DELIMITER" read -r id label description _domain _key _value_type _value _restart; do
     items="${items}${id}|${label}|${description}
 "
   done < <(rig_each_default)
@@ -563,7 +563,7 @@ rig_prompt_print_review_tools() {
 }
 
 rig_prompt_print_review_defaults() {
-  local selected_defaults selected_id row _id label _description _command _restart printed
+  local selected_defaults selected_id row _id label _description _domain _key _value_type _value _restart printed
   selected_defaults=$1
   printed=no
   printf 'macOS preferences\n' >&2
@@ -572,7 +572,7 @@ rig_prompt_print_review_defaults() {
       continue
     fi
     row=$(rig_lookup_default "$selected_id")
-    IFS="$RIG_TSV_DELIMITER" read -r _id label _description _command _restart < <(printf '%s\n' "$row")
+    IFS="$RIG_TSV_DELIMITER" read -r _id label _description _domain _key _value_type _value _restart < <(printf '%s\n' "$row")
     label=$(rig_prompt_sanitize_text "$label")
     printf '  %s\n' "$label" >&2
     printed=yes

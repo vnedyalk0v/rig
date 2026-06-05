@@ -85,11 +85,94 @@ rig_escape_brew_string() {
     value=${value#?}
     case "$char" in
       \\) escaped="${escaped}\\\\" ;;
-      \") escaped="${escaped}\\\"" ;;
+      \') escaped="${escaped}\\'" ;;
       *) escaped="${escaped}${char}" ;;
     esac
   done
   printf '%s' "$escaped"
+}
+
+rig_canonical_repo_identity() {
+  local url path owner repo
+  url=$1
+  case "$url" in
+    https://github.com/*)
+      path=${url#https://github.com/}
+      ;;
+    git@github.com:*)
+      path=${url#git@github.com:}
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+  path=${path%.git}
+  owner=${path%%/*}
+  repo=${path#*/}
+  if [ "$owner" = "$path" ] || [ "$owner" = "" ] || [ "$repo" = "" ]; then
+    return 1
+  fi
+  case "$owner" in
+    *[!A-Za-z0-9._-]*)
+      return 1
+      ;;
+  esac
+  case "$repo" in
+    *[!A-Za-z0-9._-]*)
+      return 1
+      ;;
+  esac
+  printf '%s/%s\n' "$owner" "$repo"
+}
+
+rig_expected_repo_url() {
+  printf '%s\n' 'https://github.com/vnedyalk0v/rig.git'
+}
+
+rig_validate_branch_name() {
+  case "$1" in
+    ""|-*|/*|*/|*..*|*[!A-Za-z0-9._/-]*)
+      return 1
+      ;;
+  esac
+  return 0
+}
+
+rig_clone_expected_origin() {
+  local clone_root expected_origin
+  clone_root=$1
+  if expected_origin=$(git -C "$clone_root" config --get rig.expectedOrigin 2>/dev/null); then
+    if [ "$expected_origin" != "" ]; then
+      printf '%s\n' "$expected_origin"
+      return 0
+    fi
+  fi
+  rig_expected_repo_url
+}
+
+rig_validate_clone_origin() {
+  local clone_root expected_origin actual_origin expected_identity actual_identity
+  clone_root=$1
+  if ! expected_origin=$(rig_clone_expected_origin "$clone_root"); then
+    rig_print_error "could not determine expected rig clone origin"
+    return 1
+  fi
+  if ! actual_origin=$(git -C "$clone_root" remote get-url origin 2>/dev/null); then
+    rig_print_error "rig clone has no readable origin remote: $clone_root"
+    return 1
+  fi
+  if ! expected_identity=$(rig_canonical_repo_identity "$expected_origin"); then
+    rig_print_error "invalid expected rig clone origin: $expected_origin"
+    return 1
+  fi
+  if ! actual_identity=$(rig_canonical_repo_identity "$actual_origin"); then
+    rig_print_error "rig clone origin mismatch: expected $expected_origin, found $actual_origin"
+    return 1
+  fi
+  if [ "$actual_identity" != "$expected_identity" ]; then
+    rig_print_error "rig clone origin mismatch: expected $expected_origin, found $actual_origin"
+    return 1
+  fi
 }
 
 rig_profile_path() {
