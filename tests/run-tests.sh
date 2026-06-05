@@ -476,6 +476,14 @@ PATH="$fake_darwin_bin:$PATH" HOME="$TEST_TMP/empty-home" RIG_CONFIG_DIR="$TEST_
 assert_failure "$?" "rig install --from-config fails without config"
 assert_contains "$out" "no rig config found" "from-config reports missing config"
 
+defaults_only_home="$TEST_TMP/defaults-only-home"
+mkdir -p "$defaults_only_home/.config/rig"
+: >"$defaults_only_home/.config/rig/macos-defaults.sh"
+out="$TEST_TMP/install-from-config-defaults-only.out"
+PATH="$fake_darwin_bin:/usr/bin:/bin" HOME="$defaults_only_home" RIG_CONFIG_DIR="$defaults_only_home/.config/rig" RIG_HOMEBREW_PREFIX="$TEST_TMP/missing-brew-prefix" RIG_SKIP_HOMEBREW_INSTALL=yes run_capture "$out" ./rig install --from-config
+assert_success "$?" "rig install --from-config defaults-only succeeds without Homebrew"
+assert_not_contains "$out" "Homebrew is required" "defaults-only from-config replay does not require Homebrew"
+
 rm -f "$fake_brew_log"
 apply_home="$TEST_TMP/apply-home"
 mkdir -p "$apply_home/.config/rig"

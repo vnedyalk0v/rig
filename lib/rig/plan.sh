@@ -691,6 +691,19 @@ rig_finish_install_apply() {
   fi
 }
 
+rig_from_config_needs_homebrew_preflight() {
+  if [ "$RIG_PLAN_AUTO_UPDATE" = "yes" ]; then
+    return 0
+  fi
+  if rig_brewfile_has_entries "$(rig_brewfile_path)"; then
+    return 0
+  fi
+  if rig_install_plan_has_entries "$(rig_install_plan_path)"; then
+    return 0
+  fi
+  return 1
+}
+
 rig_write_plan_config() {
   local brewfile_content install_plan_content defaults_content brewfile_path plan_path defaults_path
   rig_config_ensure_dir || return 1
@@ -1007,7 +1020,9 @@ rig_run_install() {
       rig_print_error "--from-config cannot be combined with --write-config-only"
       return 1
     fi
-    rig_homebrew_preflight install "$RIG_PLAN_YES" no || return 1
+    if rig_from_config_needs_homebrew_preflight; then
+      rig_homebrew_preflight install "$RIG_PLAN_YES" no || return 1
+    fi
     rig_finish_install_apply || return 1
     return 0
   fi
