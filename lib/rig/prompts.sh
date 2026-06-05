@@ -67,6 +67,7 @@ rig_require_interactive_terminal() {
 rig_category_label() {
   case "$1" in
     ide) printf 'IDEs and editors\n' ;;
+    terminal) printf 'Terminals\n' ;;
     browser) printf 'Browsers\n' ;;
     devops) printf 'DevOps CLIs\n' ;;
     containers) printf 'Containers\n' ;;

@@ -253,13 +253,17 @@ Example rows:
 ```text
 ide	vscode	Visual Studio Code	cask	visual-studio-code	yes	General-purpose code editor	homebrew-latest		Verify cask name
 ide	cursor	Cursor	cask	cursor	no	AI-assisted code editor	homebrew-latest		Verify cask name
+ide	antigravity-ide	Antigravity	cask	antigravity-ide	no	Google AI coding agent IDE	homebrew-latest		Verify cask name
 ide	kiro	Kiro	cask	kiro	no	Agentic IDE	homebrew-latest		Verify cask name
+terminal	ghostty	Ghostty	cask	ghostty	no	GPU-accelerated terminal emulator	homebrew-latest		Verify cask name
+terminal	warp	Warp	cask	warp	no	Rust-based terminal	homebrew-latest		Verify cask name
 ai	codex-cli	Codex CLI	cask	codex	no	OpenAI command-line coding agent	homebrew-latest		Verify current cask/formula choice
 ai	codex-desktop	Codex Desktop	cask	codex-app	no	Desktop app for managing Codex coding agents	homebrew-latest		Verify current cask name
-ai	claude-code-cli	Claude Code CLI	cask	claude-code	no	Anthropic terminal-based coding assistant	homebrew-channel	stable,latest	Use claude-code or claude-code@latest
-ai	claude-desktop	Claude Desktop	cask	claude	no	Anthropic desktop app that can support Claude Code workflows	homebrew-latest		Use official Claude desktop cask
-ai	pi-coding-agent	Pi Coding Agent	external	@earendil-works/pi-coding-agent	no	Minimal extensible terminal coding harness	npm-or-vendor	latest,<supported versions>	Install from pi.dev/npm; use --ignore-scripts for npm/pnpm/bun package path
-ai	opencode	OpenCode	tap-formula	opencode-ai/tap/opencode	no	Open-source terminal coding agent	homebrew-or-vendor	latest,<supported versions>	Homebrew tap for latest; vendor installer supports VERSION
+ai	claude-code-cli	Claude Code CLI	cask	claude-code	no	Anthropic terminal-based coding assistant	homebrew-latest		Use stable Homebrew cask
+ai	claude-code-desktop	Claude Code Desktop	cask	claude	no	Claude Desktop app with Claude Code workflows	homebrew-latest		Use official Claude desktop cask
+ai	pi-cli	Pi CLI	formula	pi-coding-agent	no	Minimal extensible terminal coding harness	homebrew-latest		Homebrew formula packages the pi.dev CLI
+ai	opencode-cli	OpenCode CLI	formula	opencode	no	AI coding agent built for the terminal	homebrew-latest		Homebrew core formula
+ai	opencode-desktop	OpenCode Desktop	cask	opencode-desktop	no	Desktop client for the OpenCode coding agent	homebrew-latest		Verify cask name
 browser	chrome	Google Chrome	cask	google-chrome	yes	Mainstream browser	homebrew-latest		Verify cask name
 browser	firefox	Firefox	cask	firefox	no	Open-source browser	homebrew-latest		Verify cask name
 browser	brave	Brave	cask	brave-browser	no	Privacy-focused browser	homebrew-latest		Verify cask name
@@ -270,6 +274,9 @@ infra	terraform	Terraform	version-manager	tenv:tf	no	HashiCorp infrastructure-as
 infra	opentofu	OpenTofu	version-manager	tenv:tofu	no	Open-source Terraform-compatible IaC CLI	tenv	latest,<opentofu versions>	Managed by tenv
 infra	terraspace	Terraspace	tap-formula	boltops-tools/software/terraspace	no	Framework for Terraform/OpenTofu project structure and workflows	homebrew-latest		Specific versions deferred unless RubyGems/Bundler path is added
 infra	terragrunt	Terragrunt	version-manager	tenv:tg	no	Wrapper for reusable Terraform/OpenTofu configuration and remote state	tenv	latest,<terragrunt versions>	Managed by tenv
+containers	orbstack	OrbStack	cask	orbstack	no	Fast Docker and Linux machine runtime for macOS	homebrew-latest		Verify cask name
+containers	docker-desktop	Docker Desktop	cask	docker-desktop	no	Docker GUI and runtime bundle for macOS	homebrew-latest		Verify current cask name
+containers	docker-cli	Docker CLI	formula	docker	no	Standalone Docker command-line client	homebrew-latest		Verify formula name
 ```
 
 Before implementation, actual Homebrew formula/cask names and external installer sources should be verified with `brew info`, `brew info --cask`, official package-manager metadata, or the vendor's official installation docs because package names and distribution methods can change. Items that cannot be installed automatically and safely should not pretend to be installable; they should be disabled with a clear reason or omitted until a supported installer is available.

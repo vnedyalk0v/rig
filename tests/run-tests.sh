@@ -208,6 +208,18 @@ assert_success "$?" "rig list category succeeds"
 assert_contains "$out" "codex-cli" "AI category includes Codex CLI"
 assert_not_contains "$out" "google-chrome" "AI category excludes browser tools"
 
+out="$TEST_TMP/list-ide.out"
+run_capture "$out" ./rig list --category ide
+assert_success "$?" "rig list IDE category succeeds"
+assert_contains "$out" $'antigravity-ide\tAntigravity\t' "IDE category labels Antigravity consistently"
+assert_not_contains "$out" "Google Antigravity IDE" "IDE category avoids vendor-prefixed Antigravity label"
+
+out="$TEST_TMP/list-terminal.out"
+run_capture "$out" ./rig list --category terminal
+assert_success "$?" "rig list terminal category succeeds"
+assert_contains "$out" "ghostty" "terminal category includes Ghostty"
+assert_contains "$out" "warp" "terminal category includes Warp"
+
 out="$TEST_TMP/list-unknown-category.out"
 run_capture "$out" ./rig list --category does-not-exist
 assert_failure "$?" "rig list rejects unknown categories"
@@ -230,6 +242,27 @@ assert_contains "$out" "node-npm	nvm	latest	Node.js/npm" "dry-run includes Node 
 assert_contains "$out" "# macOS defaults preview" "dry-run prints macOS defaults section"
 assert_contains "$out" "defaults write 'com.apple.finder' 'AppleShowAllFiles' -bool true" "dry-run includes selected Finder default"
 assert_contains "$out" "# Shell/profile edits preview" "dry-run prints shell edits section"
+
+out="$TEST_TMP/dry-run-expanded-catalog.out"
+PATH="$fake_darwin_bin:$PATH" run_capture "$out" ./rig dry-run --select orbstack,docker-desktop,docker-cli,terraspace,awsume,zen,codex-desktop,claude-code-cli,claude-code-desktop,pi-cli,opencode-cli,opencode-desktop,antigravity-ide,kiro,ghostty,warp
+assert_success "$?" "dry-run supports expanded catalog selections"
+assert_contains "$out" "cask 'orbstack'" "dry-run includes OrbStack cask"
+assert_contains "$out" "cask 'docker-desktop'" "dry-run includes Docker Desktop cask"
+assert_contains "$out" "brew 'docker'" "dry-run includes Docker CLI formula"
+assert_contains "$out" "tap 'boltops-tools/software'" "dry-run includes Terraspace tap"
+assert_contains "$out" "brew 'terraspace'" "dry-run includes Terraspace formula"
+assert_contains "$out" "brew 'awsume'" "dry-run includes awsume formula"
+assert_contains "$out" "cask 'zen'" "dry-run includes Zen cask"
+assert_contains "$out" "cask 'codex-app'" "dry-run includes Codex Desktop cask"
+assert_contains "$out" "cask 'claude-code'" "dry-run includes Claude Code CLI cask"
+assert_contains "$out" "cask 'claude'" "dry-run includes Claude Code Desktop app cask"
+assert_contains "$out" "brew 'pi-coding-agent'" "dry-run includes Pi CLI formula"
+assert_contains "$out" "brew 'opencode'" "dry-run includes OpenCode CLI formula"
+assert_contains "$out" "cask 'opencode-desktop'" "dry-run includes OpenCode Desktop cask"
+assert_contains "$out" "cask 'antigravity-ide'" "dry-run includes Antigravity cask"
+assert_contains "$out" "cask 'kiro'" "dry-run includes Kiro cask"
+assert_contains "$out" "cask 'ghostty'" "dry-run includes Ghostty cask"
+assert_contains "$out" "cask 'warp'" "dry-run includes Warp cask"
 
 tap_tools_catalog="$TEST_TMP/tap-tools.tsv"
 {
@@ -781,7 +814,7 @@ PATH="$fake_darwin_bin:/usr/bin:/bin" RIG_ROOT="$ROOT_DIR" bash -c '
   . "'"$ROOT_DIR"'/lib/rig/prompts.sh"
   rig_validate_catalogs
   RIG_PROMPT_STEP=1
-  RIG_PROMPT_TOTAL=8
+  RIG_PROMPT_TOTAL=9
   printf "\n" | rig_prompt_tools_for_category ide
 ' >"$prompt_stdout" 2>"$prompt_stderr"
 assert_success "$?" "plain tool prompt succeeds with blank selection"
@@ -793,7 +826,7 @@ else
   printf '%s\n' "----------------"
   fail "plain tool prompt keeps stdout selection-only"
 fi
-assert_contains "$prompt_stderr" "rig setup | 1/8 IDEs and editors | selected 0" "plain tool prompt writes progress header to stderr"
+assert_contains "$prompt_stderr" "rig setup | 1/9 IDEs and editors | selected 0" "plain tool prompt writes progress header to stderr"
 assert_contains "$prompt_stderr" "IDEs and editors" "plain tool prompt writes category heading to stderr"
 assert_contains "$prompt_stderr" "> [ ] Visual Studio Code" "plain tool prompt renders active checkbox row without numbers"
 assert_contains "$prompt_stderr" "vscode" "plain tool prompt shows catalog id"
