@@ -129,6 +129,15 @@ rig_expected_repo_url() {
   printf '%s\n' 'https://github.com/vnedyalk0v/rig.git'
 }
 
+rig_validate_branch_name() {
+  case "$1" in
+    ""|-*|/*|*/|*..*|*[!A-Za-z0-9._/-]*)
+      return 1
+      ;;
+  esac
+  return 0
+}
+
 rig_clone_expected_origin() {
   local clone_root expected_origin
   clone_root=$1

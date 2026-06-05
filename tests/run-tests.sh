@@ -1226,8 +1226,25 @@ case "\$1:\$2:\$3" in
     exit 0
     ;;
 esac
+case "\$1:\$2:\$3:\$4" in
+  symbolic-ref:--quiet:--short:HEAD)
+    printf 'main\n'
+    exit 0
+    ;;
+esac
 case "\$1" in
-  fetch|pull)
+  fetch)
+    exit 0
+    ;;
+  pull)
+    if [ "\$*" = "pull --ff-only origin main" ]; then
+      exit 0
+    fi
+    exit 17
+    ;;
+esac
+case "\$1" in
+  config)
     exit 0
     ;;
 esac
@@ -1239,7 +1256,7 @@ rm -f "$self_update_match_git_log"
 PATH="$fake_darwin_bin:$self_update_match_git_bin:$PATH" run_capture "$out" ./rig self-update
 assert_success "$?" "rig self-update accepts canonical matching origins"
 assert_contains "$self_update_match_git_log" "fetch origin" "self-update matching origin fetches"
-assert_contains "$self_update_match_git_log" "pull --ff-only" "self-update matching origin pulls"
+assert_contains "$self_update_match_git_log" "pull --ff-only origin main" "self-update pins pull to validated origin and current branch"
 
 if [ "$(uname -s 2>/dev/null)" = "Darwin" ]; then
   doctor_home="$TEST_TMP/readonly-home"

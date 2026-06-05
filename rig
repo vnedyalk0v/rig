@@ -46,6 +46,8 @@ rig_install_command() {
 }
 
 rig_self_update() {
+  local update_branch
+
   rig_handle_command_help self-update \
     'Usage: rig self-update' \
     'Updates the local rig git clone with a fast-forward-only pull.' \
@@ -64,11 +66,19 @@ rig_self_update() {
     return 1
   fi
   rig_validate_clone_origin "$RIG_ROOT" || return 1
+  if ! update_branch=$(git -C "$RIG_ROOT" symbolic-ref --quiet --short HEAD 2>/dev/null); then
+    rig_print_error "self-update requires a checked-out branch; current rig clone is detached"
+    return 1
+  fi
+  if ! rig_validate_branch_name "$update_branch"; then
+    rig_print_error "invalid current rig branch name: $update_branch"
+    return 1
+  fi
 
   (
     cd "$RIG_ROOT" || exit 1
-    git fetch origin || exit 1
-    git pull --ff-only || exit 1
+    git fetch origin "$update_branch" || exit 1
+    git pull --ff-only origin "$update_branch" || exit 1
   )
 }
 
