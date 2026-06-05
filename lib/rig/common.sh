@@ -34,6 +34,51 @@ rig_require_macos() {
   return 0
 }
 
+rig_macos_version() {
+  if [ "${RIG_MACOS_VERSION:-}" != "" ]; then
+    printf '%s\n' "$RIG_MACOS_VERSION"
+    return 0
+  fi
+  sw_vers -productVersion 2>/dev/null
+}
+
+rig_macos_major_version() {
+  local version major
+  version=$1
+  major=${version%%.*}
+  case "$major" in
+    ""|*[!0-9]*)
+      return 1
+      ;;
+  esac
+  printf '%s\n' "$major"
+}
+
+rig_macos_version_meets_minimum() {
+  local current minimum current_major minimum_major
+  current=$1
+  minimum=$2
+  current_major=$(rig_macos_major_version "$current") || return 1
+  minimum_major=$(rig_macos_major_version "$minimum") || return 1
+  [ "$current_major" -ge "$minimum_major" ]
+}
+
+rig_machine_arch() {
+  if [ "${RIG_MACHINE_ARCH:-}" != "" ]; then
+    printf '%s\n' "$RIG_MACHINE_ARCH"
+    return 0
+  fi
+  uname -m 2>/dev/null
+}
+
+rig_arch_matches_requirement() {
+  local current required
+  current=$1
+  required=$2
+  [ "$required" = "" ] && return 0
+  [ "$current" = "$required" ]
+}
+
 rig_usage() {
   printf 'Usage:\n'
   printf '  %s\n' "${RIG_INSTALL_USAGE#Usage: }"

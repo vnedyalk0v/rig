@@ -2,7 +2,7 @@
 
 rig_print_list() {
   local category_filter category_seen
-  local category id label kind package default_flag description version_strategy _versions _notes
+  local category id label kind package default_flag description version_strategy _versions _min_macos _arch _notes
   category_filter=
   category_seen=no
 
@@ -39,7 +39,7 @@ rig_print_list() {
   fi
 
   printf 'category\tid\tlabel\tkind\tpackage\tdefault\tversion_strategy\tdescription\n'
-  while IFS="$RIG_TSV_DELIMITER" read -r category id label kind package default_flag description version_strategy _versions _notes; do
+  while IFS="$RIG_TSV_DELIMITER" read -r category id label kind package default_flag description version_strategy _versions _min_macos _arch _notes; do
     if [ "$category_filter" != "" ] && [ "$category" != "$category_filter" ]; then
       continue
     fi
@@ -174,7 +174,7 @@ rig_collect_inline_select_versions() {
 
 rig_collect_selected_tools() {
   local select_arg category_filter seen selected_token tool_id row
-  local category id _id _label _kind _package default_flag _default_flag _description _version_strategy _versions _notes
+  local category id _id _label _kind _package default_flag _default_flag _description _version_strategy _versions _min_macos _arch _notes
   select_arg=$1
   category_filter=$2
   seen='
@@ -201,7 +201,7 @@ rig_collect_selected_tools() {
         rig_print_error "unknown catalog id: $tool_id"
         return 1
       fi
-      IFS="$RIG_TSV_DELIMITER" read -r category _id _label _kind _package _default_flag _description _version_strategy _versions _notes < <(printf '%s\n' "$row")
+      IFS="$RIG_TSV_DELIMITER" read -r category _id _label _kind _package _default_flag _description _version_strategy _versions _min_macos _arch _notes < <(printf '%s\n' "$row")
       if [ "$category_filter" != "" ] && [ "$category" != "$category_filter" ]; then
         rig_print_error "catalog id $tool_id is not in category $category_filter"
         return 1
@@ -213,7 +213,7 @@ rig_collect_selected_tools() {
     return 0
   fi
 
-  while IFS="$RIG_TSV_DELIMITER" read -r category id _label _kind _package default_flag _description _version_strategy _versions _notes; do
+  while IFS="$RIG_TSV_DELIMITER" read -r category id _label _kind _package default_flag _description _version_strategy _versions _min_macos _arch _notes; do
     if [ "$category_filter" != "" ] && [ "$category" != "$category_filter" ]; then
       continue
     fi
@@ -221,6 +221,45 @@ rig_collect_selected_tools() {
       printf '%s\n' "$id"
     fi
   done < <(rig_each_tool)
+}
+
+rig_validate_selected_tools_platform() {
+  local selected_tools current_version current_arch selected_id row id min_macos arch
+  local _category _label _kind _package _default_flag _description _version_strategy _versions _notes
+  selected_tools=$1
+  current_version=
+  current_arch=
+  while IFS= read -r selected_id || [ "$selected_id" != "" ]; do
+    if [ "$selected_id" = "" ]; then
+      continue
+    fi
+    row=$(rig_lookup_tool "$selected_id")
+    IFS="$RIG_TSV_DELIMITER" read -r _category id _label _kind _package _default_flag _description _version_strategy _versions min_macos arch _notes < <(printf '%s\n' "$row")
+    if [ "$min_macos" != "" ]; then
+      if [ "$current_version" = "" ]; then
+        if ! current_version=$(rig_macos_version); then
+          rig_print_error "could not determine current macOS version for $id; requires macOS $min_macos or newer"
+          return 1
+        fi
+      fi
+      if ! rig_macos_version_meets_minimum "$current_version" "$min_macos"; then
+        rig_print_error "$id requires macOS $min_macos or newer; detected macOS $current_version"
+        return 1
+      fi
+    fi
+    if [ "$arch" != "" ]; then
+      if [ "$current_arch" = "" ]; then
+        if ! current_arch=$(rig_machine_arch); then
+          rig_print_error "could not determine current machine architecture for $id; requires $arch"
+          return 1
+        fi
+      fi
+      if ! rig_arch_matches_requirement "$current_arch" "$arch"; then
+        rig_print_error "$id requires $arch; detected $current_arch"
+        return 1
+      fi
+    fi
+  done < <(printf '%s\n' "$selected_tools")
 }
 
 rig_collect_selected_defaults() {
@@ -307,14 +346,14 @@ rig_render_brewfile_line() {
 }
 
 rig_emit_brewfile_content() {
-  local selected_tools selected_id row _category _id label kind package _default_flag _description _version_strategy _versions _notes
+  local selected_tools selected_id row _category _id label kind package _default_flag _description _version_strategy _versions _min_macos _arch _notes
   selected_tools=$1
   while IFS= read -r selected_id || [ "$selected_id" != "" ]; do
     if [ "$selected_id" = "" ]; then
       continue
     fi
     row=$(rig_lookup_tool "$selected_id")
-    IFS="$RIG_TSV_DELIMITER" read -r _category _id label kind package _default_flag _description _version_strategy _versions _notes < <(printf '%s\n' "$row")
+    IFS="$RIG_TSV_DELIMITER" read -r _category _id label kind package _default_flag _description _version_strategy _versions _min_macos _arch _notes < <(printf '%s\n' "$row")
     case "$kind" in
       formula|cask|tap-formula|mas|vscode)
         rig_render_brewfile_line "$kind" "$package" "$label"
@@ -324,7 +363,7 @@ rig_emit_brewfile_content() {
 }
 
 rig_emit_install_plan() {
-  local selected_tools version_map format selected_id row id label kind package version_strategy versions selected_version _category _default_flag _description _notes
+  local selected_tools version_map format selected_id row id label kind package version_strategy versions selected_version _category _default_flag _description _min_macos _arch _notes
   selected_tools=$1
   version_map=$2
   format=$3
@@ -336,7 +375,7 @@ rig_emit_install_plan() {
       continue
     fi
     row=$(rig_lookup_tool "$selected_id")
-    IFS="$RIG_TSV_DELIMITER" read -r _category id label kind package _default_flag _description version_strategy versions _notes < <(printf '%s\n' "$row")
+    IFS="$RIG_TSV_DELIMITER" read -r _category id label kind package _default_flag _description version_strategy versions _min_macos _arch _notes < <(printf '%s\n' "$row")
     case "$kind" in
       external|version-manager)
         selected_version=$(rig_resolve_tool_version "$id" "$versions" "$version_map")
@@ -405,7 +444,7 @@ rig_emit_macos_defaults_preview() {
 }
 
 rig_count_shell_edits_needed() {
-  local selected_tools selected_id row version_strategy count _category _id _label _kind _package _default_flag _description _versions _notes
+  local selected_tools selected_id row version_strategy count _category _id _label _kind _package _default_flag _description _versions _min_macos _arch _notes
   selected_tools=$1
   count=0
   while IFS= read -r selected_id || [ "$selected_id" != "" ]; do
@@ -413,7 +452,7 @@ rig_count_shell_edits_needed() {
       continue
     fi
     row=$(rig_lookup_tool "$selected_id")
-    IFS="$RIG_TSV_DELIMITER" read -r _category _id _label _kind _package _default_flag _description version_strategy _versions _notes < <(printf '%s\n' "$row")
+    IFS="$RIG_TSV_DELIMITER" read -r _category _id _label _kind _package _default_flag _description version_strategy _versions _min_macos _arch _notes < <(printf '%s\n' "$row")
     if rig_strategy_needs_shell_edit "$version_strategy"; then
       count=$((count + 1))
     fi
@@ -422,7 +461,7 @@ rig_count_shell_edits_needed() {
 }
 
 rig_count_homebrew_selected() {
-  local selected_tools selected_id row kind count _category _id _label _package _default_flag _description _version_strategy _versions _notes
+  local selected_tools selected_id row kind count _category _id _label _package _default_flag _description _version_strategy _versions _min_macos _arch _notes
   selected_tools=$1
   count=0
   while IFS= read -r selected_id || [ "$selected_id" != "" ]; do
@@ -430,7 +469,7 @@ rig_count_homebrew_selected() {
       continue
     fi
     row=$(rig_lookup_tool "$selected_id")
-    IFS="$RIG_TSV_DELIMITER" read -r _category _id _label kind _package _default_flag _description _version_strategy _versions _notes < <(printf '%s\n' "$row")
+    IFS="$RIG_TSV_DELIMITER" read -r _category _id _label kind _package _default_flag _description _version_strategy _versions _min_macos _arch _notes < <(printf '%s\n' "$row")
     case "$kind" in
       formula|cask|tap-formula|mas|vscode)
         count=$((count + 1))
@@ -441,7 +480,7 @@ rig_count_homebrew_selected() {
 }
 
 rig_count_external_selected() {
-  local selected_tools selected_id row kind count _category _id _label _package _default_flag _description _version_strategy _versions _notes
+  local selected_tools selected_id row kind count _category _id _label _package _default_flag _description _version_strategy _versions _min_macos _arch _notes
   selected_tools=$1
   count=0
   while IFS= read -r selected_id || [ "$selected_id" != "" ]; do
@@ -449,7 +488,7 @@ rig_count_external_selected() {
       continue
     fi
     row=$(rig_lookup_tool "$selected_id")
-    IFS="$RIG_TSV_DELIMITER" read -r _category _id _label kind _package _default_flag _description _version_strategy _versions _notes < <(printf '%s\n' "$row")
+    IFS="$RIG_TSV_DELIMITER" read -r _category _id _label kind _package _default_flag _description _version_strategy _versions _min_macos _arch _notes < <(printf '%s\n' "$row")
     case "$kind" in
       external|version-manager)
         count=$((count + 1))
@@ -666,6 +705,9 @@ rig_resolve_plan_selections() {
   fi
   RIG_PLAN_VERSION_MAP=$version_map
   if ! selected_tools=$(rig_collect_selected_tools "$RIG_PLAN_SELECT" "$RIG_PLAN_CATEGORY"); then
+    return 1
+  fi
+  if ! rig_validate_selected_tools_platform "$selected_tools"; then
     return 1
   fi
   if ! selected_defaults=$(rig_collect_selected_defaults "$RIG_PLAN_DEFAULTS"); then

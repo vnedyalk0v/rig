@@ -99,8 +99,26 @@ case "$1" in
   ""|-s)
     printf 'Darwin\n'
     ;;
+  -m)
+    printf '%s\n' "${RIG_MACHINE_ARCH:-arm64}"
+    ;;
   *)
     /usr/bin/uname "$@"
+    ;;
+esac
+EOF
+cat >"$fake_darwin_bin/sw_vers" <<'EOF'
+#!/bin/bash
+case "$1" in
+  -productVersion)
+    printf '%s\n' "${RIG_MACOS_VERSION:-15.0}"
+    ;;
+  *)
+    if [ -x /usr/bin/sw_vers ]; then
+      /usr/bin/sw_vers "$@"
+    else
+      printf '%s\n' "${RIG_MACOS_VERSION:-15.0}"
+    fi
     ;;
 esac
 EOF
@@ -115,7 +133,7 @@ case "$1" in
     ;;
 esac
 EOF
-chmod +x "$fake_darwin_bin/uname" "$fake_linux_bin/uname"
+chmod +x "$fake_darwin_bin/uname" "$fake_darwin_bin/sw_vers" "$fake_linux_bin/uname"
 
 fake_brew_bin="$TEST_TMP/fake-brew-bin"
 fake_brew_log="$TEST_TMP/brew.log"
@@ -158,9 +176,9 @@ assert_contains "$out" "Catalog validation passed" "catalog validation reports s
 
 duplicate_catalog="$TEST_TMP/duplicate-tools.tsv"
 {
-  printf 'category\tid\tlabel\tkind\tpackage\tdefault\tdescription\tversion_strategy\tversions\tnotes\n'
-  printf 'ide\tvscode\tVisual Studio Code\tcask\tvisual-studio-code\tyes\tEditor\thomebrew-latest\t\t\n'
-  printf 'browser\tvscode\tDuplicate\tcask\tduplicate\tno\tDuplicate id\thomebrew-latest\t\t\n'
+  printf 'category\tid\tlabel\tkind\tpackage\tdefault\tdescription\tversion_strategy\tversions\tmin_macos\tarch\tnotes\n'
+  printf 'ide\tvscode\tVisual Studio Code\tcask\tvisual-studio-code\tyes\tEditor\thomebrew-latest\t\t\t\t\n'
+  printf 'browser\tvscode\tDuplicate\tcask\tduplicate\tno\tDuplicate id\thomebrew-latest\t\t\t\t\n'
 } >"$duplicate_catalog"
 out="$TEST_TMP/catalog-duplicate.out"
 run_capture "$out" ./scripts/validate-catalog.sh --tools "$duplicate_catalog"
@@ -169,8 +187,8 @@ assert_contains "$out" "duplicate id: vscode" "duplicate id is reported"
 
 missing_description="$TEST_TMP/missing-description.tsv"
 {
-  printf 'category\tid\tlabel\tkind\tpackage\tdefault\tdescription\tversion_strategy\tversions\tnotes\n'
-  printf 'ide\tvscode\tVisual Studio Code\tcask\tvisual-studio-code\tyes\t\thomebrew-latest\t\t\n'
+  printf 'category\tid\tlabel\tkind\tpackage\tdefault\tdescription\tversion_strategy\tversions\tmin_macos\tarch\tnotes\n'
+  printf 'ide\tvscode\tVisual Studio Code\tcask\tvisual-studio-code\tyes\t\thomebrew-latest\t\t\t\t\n'
 } >"$missing_description"
 out="$TEST_TMP/catalog-missing-description.out"
 run_capture "$out" ./scripts/validate-catalog.sh --tools "$missing_description"
@@ -179,13 +197,23 @@ assert_contains "$out" "description is required" "missing description is reporte
 
 interpolated_package_catalog="$TEST_TMP/interpolated-package-tools.tsv"
 {
-  printf 'category\tid\tlabel\tkind\tpackage\tdefault\tdescription\tversion_strategy\tversions\tnotes\n'
-  printf 'devops\tevil-brew\tEvil Brew\tformula\tevil#{system("touch /tmp/rig-pwned")}\tno\tBad package\thomebrew-latest\t\t\n'
+  printf 'category\tid\tlabel\tkind\tpackage\tdefault\tdescription\tversion_strategy\tversions\tmin_macos\tarch\tnotes\n'
+  printf 'devops\tevil-brew\tEvil Brew\tformula\tevil#{system("touch /tmp/rig-pwned")}\tno\tBad package\thomebrew-latest\t\t\t\t\n'
 } >"$interpolated_package_catalog"
 out="$TEST_TMP/catalog-interpolated-package.out"
 run_capture "$out" ./scripts/validate-catalog.sh --tools "$interpolated_package_catalog"
 assert_failure "$?" "catalog validation rejects Ruby interpolation in Brewfile package fields"
 assert_contains "$out" "invalid Brewfile package" "interpolated package is reported"
+
+invalid_arch_catalog="$TEST_TMP/invalid-arch-tools.tsv"
+{
+  printf 'category\tid\tlabel\tkind\tpackage\tdefault\tdescription\tversion_strategy\tversions\tmin_macos\tarch\tnotes\n'
+  printf 'ai\tbad-arch\tBad Arch\tcask\tbad-arch\tno\tBad arch\thomebrew-latest\t\t\tppc64\t\n'
+} >"$invalid_arch_catalog"
+out="$TEST_TMP/catalog-invalid-arch.out"
+run_capture "$out" ./scripts/validate-catalog.sh --tools "$invalid_arch_catalog"
+assert_failure "$?" "catalog validation rejects unsupported architecture tags"
+assert_contains "$out" "invalid arch: ppc64" "invalid architecture tag is reported"
 
 raw_defaults_catalog="$TEST_TMP/raw-command-defaults.tsv"
 {
@@ -206,7 +234,27 @@ out="$TEST_TMP/list-ai.out"
 run_capture "$out" ./rig list --category ai
 assert_success "$?" "rig list category succeeds"
 assert_contains "$out" "codex-cli" "AI category includes Codex CLI"
+assert_contains "$out" "chatgpt-desktop" "AI category includes ChatGPT Desktop"
 assert_not_contains "$out" "google-chrome" "AI category excludes browser tools"
+
+out="$TEST_TMP/list-ide.out"
+run_capture "$out" ./rig list --category ide
+assert_success "$?" "rig list IDE category succeeds"
+assert_contains "$out" $'antigravity-ide\tAntigravity\t' "IDE category labels Antigravity consistently"
+assert_contains "$out" "sublime-text" "IDE category includes Sublime Text"
+assert_not_contains "$out" "Google Antigravity IDE" "IDE category avoids vendor-prefixed Antigravity label"
+
+out="$TEST_TMP/list-communication.out"
+run_capture "$out" ./rig list --category communication
+assert_success "$?" "rig list communication category succeeds"
+assert_contains "$out" "slack" "communication category includes Slack"
+assert_contains "$out" "teams" "communication category includes Microsoft Teams"
+
+out="$TEST_TMP/list-terminal.out"
+run_capture "$out" ./rig list --category terminal
+assert_success "$?" "rig list terminal category succeeds"
+assert_contains "$out" "ghostty" "terminal category includes Ghostty"
+assert_contains "$out" "warp" "terminal category includes Warp"
 
 out="$TEST_TMP/list-unknown-category.out"
 run_capture "$out" ./rig list --category does-not-exist
@@ -231,10 +279,77 @@ assert_contains "$out" "# macOS defaults preview" "dry-run prints macOS defaults
 assert_contains "$out" "defaults write 'com.apple.finder' 'AppleShowAllFiles' -bool true" "dry-run includes selected Finder default"
 assert_contains "$out" "# Shell/profile edits preview" "dry-run prints shell edits section"
 
+out="$TEST_TMP/dry-run-expanded-catalog.out"
+PATH="$fake_darwin_bin:$PATH" run_capture "$out" ./rig dry-run --select orbstack,docker-desktop,docker-cli,terraspace,awsume,zen,codex-desktop,chatgpt-desktop,claude-code-cli,claude-code-desktop,pi-cli,opencode-cli,opencode-desktop,antigravity-ide,kiro,sublime-text,ghostty,warp,slack,teams
+assert_success "$?" "dry-run supports expanded catalog selections"
+assert_contains "$out" "cask 'orbstack'" "dry-run includes OrbStack cask"
+assert_contains "$out" "cask 'docker-desktop'" "dry-run includes Docker Desktop cask"
+assert_contains "$out" "brew 'docker'" "dry-run includes Docker CLI formula"
+assert_contains "$out" "tap 'boltops-tools/software'" "dry-run includes Terraspace tap"
+assert_contains "$out" "brew 'terraspace'" "dry-run includes Terraspace formula"
+assert_contains "$out" "brew 'awsume'" "dry-run includes awsume formula"
+assert_contains "$out" "cask 'zen'" "dry-run includes Zen cask"
+assert_contains "$out" "cask 'codex-app'" "dry-run includes Codex Desktop cask"
+assert_contains "$out" "cask 'chatgpt'" "dry-run includes ChatGPT Desktop cask"
+assert_contains "$out" "cask 'claude-code'" "dry-run includes Claude Code CLI cask"
+assert_contains "$out" "cask 'claude'" "dry-run includes Claude Code Desktop app cask"
+assert_contains "$out" "brew 'pi-coding-agent'" "dry-run includes Pi CLI formula"
+assert_contains "$out" "brew 'opencode'" "dry-run includes OpenCode CLI formula"
+assert_contains "$out" "cask 'opencode-desktop'" "dry-run includes OpenCode Desktop cask"
+assert_contains "$out" "cask 'antigravity-ide'" "dry-run includes Antigravity cask"
+assert_contains "$out" "cask 'kiro'" "dry-run includes Kiro cask"
+assert_contains "$out" "cask 'sublime-text'" "dry-run includes Sublime Text cask"
+assert_contains "$out" "cask 'ghostty'" "dry-run includes Ghostty cask"
+assert_contains "$out" "cask 'warp'" "dry-run includes Warp cask"
+assert_contains "$out" "cask 'slack'" "dry-run includes Slack cask"
+assert_contains "$out" "cask 'microsoft-teams'" "dry-run includes Microsoft Teams cask"
+
+out="$TEST_TMP/dry-run-min-macos.out"
+PATH="$fake_darwin_bin:$PATH" RIG_MACOS_VERSION=13.6 run_capture "$out" ./rig dry-run --select orbstack
+assert_failure "$?" "dry-run rejects tools above the current macOS version"
+assert_contains "$out" "orbstack requires macOS 14 or newer; detected macOS 13.6" "unsupported macOS tool selection is reported"
+assert_not_contains "$out" "cask 'orbstack'" "unsupported macOS tool selection does not render Brewfile"
+
+out="$TEST_TMP/dry-run-chatgpt-min-macos.out"
+PATH="$fake_darwin_bin:$PATH" RIG_MACOS_VERSION=13.6 run_capture "$out" ./rig dry-run --select chatgpt-desktop
+assert_failure "$?" "dry-run rejects ChatGPT Desktop on unsupported macOS"
+assert_contains "$out" "chatgpt-desktop requires macOS 14 or newer; detected macOS 13.6" "ChatGPT Desktop reports unsupported macOS"
+assert_not_contains "$out" "cask 'chatgpt'" "ChatGPT Desktop unsupported macOS selection does not render Brewfile"
+
+out="$TEST_TMP/dry-run-chatgpt-arch.out"
+PATH="$fake_darwin_bin:$PATH" RIG_MACHINE_ARCH=x86_64 run_capture "$out" ./rig dry-run --select chatgpt-desktop
+assert_failure "$?" "dry-run rejects ChatGPT Desktop on unsupported architecture"
+assert_contains "$out" "chatgpt-desktop requires arm64; detected x86_64" "ChatGPT Desktop reports unsupported architecture"
+assert_not_contains "$out" "cask 'chatgpt'" "ChatGPT Desktop unsupported architecture selection does not render Brewfile"
+
+out="$TEST_TMP/install-write-config-min-macos.out"
+old_macos_home="$TEST_TMP/install-write-config-min-macos-home"
+mkdir -p "$old_macos_home"
+PATH="$fake_darwin_bin:$PATH" RIG_MACOS_VERSION=13.6 HOME="$old_macos_home" RIG_CONFIG_DIR="$old_macos_home/.config/rig" run_capture "$out" ./rig install --write-config-only --select docker-desktop
+assert_failure "$?" "write-config-only rejects tools above the current macOS version"
+assert_contains "$out" "docker-desktop requires macOS 14 or newer; detected macOS 13.6" "write-config-only reports unsupported macOS tool selection"
+if [ -e "$old_macos_home/.config/rig" ]; then
+  fail "write-config-only unsupported macOS selection does not write config"
+else
+  pass "write-config-only unsupported macOS selection does not write config"
+fi
+
+out="$TEST_TMP/install-write-config-chatgpt-arch.out"
+unsupported_arch_home="$TEST_TMP/install-write-config-chatgpt-arch-home"
+mkdir -p "$unsupported_arch_home"
+PATH="$fake_darwin_bin:$PATH" RIG_MACHINE_ARCH=x86_64 HOME="$unsupported_arch_home" RIG_CONFIG_DIR="$unsupported_arch_home/.config/rig" run_capture "$out" ./rig install --write-config-only --select chatgpt-desktop
+assert_failure "$?" "write-config-only rejects ChatGPT Desktop on unsupported architecture"
+assert_contains "$out" "chatgpt-desktop requires arm64; detected x86_64" "write-config-only reports unsupported ChatGPT Desktop architecture"
+if [ -e "$unsupported_arch_home/.config/rig" ]; then
+  fail "write-config-only unsupported architecture selection does not write config"
+else
+  pass "write-config-only unsupported architecture selection does not write config"
+fi
+
 tap_tools_catalog="$TEST_TMP/tap-tools.tsv"
 {
-  printf 'category\tid\tlabel\tkind\tpackage\tdefault\tdescription\tversion_strategy\tversions\tnotes\n'
-  printf 'devops\ttap-tool\tTap Tool\ttap-formula\towner/tap/tool\tno\tTool from a tap\thomebrew-latest\t\t\n'
+  printf 'category\tid\tlabel\tkind\tpackage\tdefault\tdescription\tversion_strategy\tversions\tmin_macos\tarch\tnotes\n'
+  printf 'devops\ttap-tool\tTap Tool\ttap-formula\towner/tap/tool\tno\tTool from a tap\thomebrew-latest\t\t\t\t\n'
 } >"$tap_tools_catalog"
 out="$TEST_TMP/dry-run-tap-formula-summary.out"
 PATH="$fake_darwin_bin:$PATH" RIG_TOOLS_CATALOG="$tap_tools_catalog" run_capture "$out" ./rig dry-run --select tap-tool
@@ -781,7 +896,7 @@ PATH="$fake_darwin_bin:/usr/bin:/bin" RIG_ROOT="$ROOT_DIR" bash -c '
   . "'"$ROOT_DIR"'/lib/rig/prompts.sh"
   rig_validate_catalogs
   RIG_PROMPT_STEP=1
-  RIG_PROMPT_TOTAL=8
+  RIG_PROMPT_TOTAL=9
   printf "\n" | rig_prompt_tools_for_category ide
 ' >"$prompt_stdout" 2>"$prompt_stderr"
 assert_success "$?" "plain tool prompt succeeds with blank selection"
@@ -793,7 +908,7 @@ else
   printf '%s\n' "----------------"
   fail "plain tool prompt keeps stdout selection-only"
 fi
-assert_contains "$prompt_stderr" "rig setup | 1/8 IDEs and editors | selected 0" "plain tool prompt writes progress header to stderr"
+assert_contains "$prompt_stderr" "rig setup | 1/9 IDEs and editors | selected 0" "plain tool prompt writes progress header to stderr"
 assert_contains "$prompt_stderr" "IDEs and editors" "plain tool prompt writes category heading to stderr"
 assert_contains "$prompt_stderr" "> [ ] Visual Studio Code" "plain tool prompt renders active checkbox row without numbers"
 assert_contains "$prompt_stderr" "vscode" "plain tool prompt shows catalog id"
@@ -1119,8 +1234,8 @@ assert_contains "$out" "1" "shell edit count does not skip id-prefixed rows as h
 
 invalid_mas_catalog="$TEST_TMP/invalid-mas-tools.tsv"
 {
-  printf 'category\tid\tlabel\tkind\tpackage\tdefault\tdescription\tversion_strategy\tversions\tnotes\n'
-  printf 'productivity\tbad-mas\tBad MAS\tmas\tnot-a-number\tno\tInvalid mas id\thomebrew-latest\t\t\n'
+  printf 'category\tid\tlabel\tkind\tpackage\tdefault\tdescription\tversion_strategy\tversions\tmin_macos\tarch\tnotes\n'
+  printf 'productivity\tbad-mas\tBad MAS\tmas\tnot-a-number\tno\tInvalid mas id\thomebrew-latest\t\t\t\t\n'
 } >"$invalid_mas_catalog"
 out="$TEST_TMP/catalog-invalid-mas.out"
 run_capture "$out" ./scripts/validate-catalog.sh --tools "$invalid_mas_catalog"
@@ -1129,8 +1244,8 @@ assert_contains "$out" "invalid mas id: not-a-number" "invalid mas id is reporte
 
 invalid_tap_catalog="$TEST_TMP/invalid-tap-tools.tsv"
 {
-  printf 'category\tid\tlabel\tkind\tpackage\tdefault\tdescription\tversion_strategy\tversions\tnotes\n'
-  printf 'infra\tbad-tap\tBad Tap\ttap-formula\tmissing-slash\tno\tInvalid tap formula\thomebrew-latest\t\t\n'
+  printf 'category\tid\tlabel\tkind\tpackage\tdefault\tdescription\tversion_strategy\tversions\tmin_macos\tarch\tnotes\n'
+  printf 'infra\tbad-tap\tBad Tap\ttap-formula\tmissing-slash\tno\tInvalid tap formula\thomebrew-latest\t\t\t\t\n'
 } >"$invalid_tap_catalog"
 out="$TEST_TMP/catalog-invalid-tap.out"
 run_capture "$out" ./scripts/validate-catalog.sh --tools "$invalid_tap_catalog"

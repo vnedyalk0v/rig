@@ -1,17 +1,37 @@
-category	id	label	kind	package	default	description	version_strategy	versions	notes
-ide	vscode	Visual Studio Code	cask	visual-studio-code	yes	General-purpose code editor	homebrew-latest		Verified with brew info --cask visual-studio-code on 2026-06-02
-ide	cursor	Cursor	cask	cursor	no	AI-assisted code editor	homebrew-latest		Verified with brew info --cask cursor on 2026-06-02
-ide	zed	Zed	cask	zed	no	High-performance code editor	homebrew-latest		Verified with brew info --cask zed on 2026-06-02
-ai	codex-cli	Codex CLI	cask	codex	no	OpenAI command-line coding agent	homebrew-latest		Verified with brew info --cask codex on 2026-06-02
-browser	chrome	Google Chrome	cask	google-chrome	yes	Mainstream browser	homebrew-latest		Verified with brew info --cask google-chrome on 2026-06-02
-browser	firefox	Firefox	cask	firefox	no	Open-source browser	homebrew-latest		Verified with brew info --cask firefox on 2026-06-02
-browser	brave	Brave	cask	brave-browser	no	Privacy-focused browser	homebrew-latest		Verified with brew info --cask brave-browser on 2026-06-02
-runtime	node-npm	Node.js/npm	external	nvm	no	Node.js runtime plus npm package manager	nvm	latest,lts	External version manager via nvm
-runtime	bun	Bun	external	bun.com/install	no	JavaScript runtime, package manager, and bundler	bun-installer	latest	Official Bun installer
-devops	gh	GitHub CLI	formula	gh	yes	GitHub from the terminal	homebrew-latest		Verified with brew info gh on 2026-06-02
-devops	aws-cli	AWS CLI	formula	awscli	no	Amazon Web Services command-line interface	homebrew-latest		Verified with brew info awscli on 2026-06-02
-infra	terraform	Terraform	version-manager	tenv:tf	no	HashiCorp infrastructure-as-code CLI	tenv	latest	Managed by tenv
-infra	opentofu	OpenTofu	version-manager	tenv:tofu	no	Open-source Terraform-compatible IaC CLI	tenv	latest	Managed by tenv
-infra	terragrunt	Terragrunt	version-manager	tenv:tg	no	Terraform/OpenTofu wrapper for DRY configs	tenv	latest	Managed by tenv
-containers	colima	Colima	formula	colima	no	Container runtime for macOS with minimal setup	homebrew-latest		Verified with brew info colima on 2026-06-02
-productivity	raycast	Raycast	cask	raycast	no	Launcher and productivity utility	homebrew-latest		Verified with brew info --cask raycast on 2026-06-02
+category	id	label	kind	package	default	description	version_strategy	versions	min_macos	arch	notes
+ide	vscode	Visual Studio Code	cask	visual-studio-code	yes	General-purpose code editor	homebrew-latest				Verified with brew info --cask visual-studio-code on 2026-06-02
+ide	cursor	Cursor	cask	cursor	no	AI-assisted code editor	homebrew-latest				Verified with brew info --cask cursor on 2026-06-02
+ide	zed	Zed	cask	zed	no	High-performance code editor	homebrew-latest				Verified with brew info --cask zed on 2026-06-02
+ide	antigravity-ide	Antigravity	cask	antigravity-ide	no	Google AI coding agent IDE	homebrew-latest				Verified with Homebrew Formulae API on 2026-06-05
+ide	kiro	Kiro	cask	kiro	no	AWS agent-centric IDE for spec-driven development	homebrew-latest				Verified with Homebrew Formulae API on 2026-06-05
+ide	sublime-text	Sublime Text	cask	sublime-text	no	Text editor for code, markup, and prose	homebrew-latest				Verified with Homebrew Formulae API on 2026-06-05
+terminal	ghostty	Ghostty	cask	ghostty	no	GPU-accelerated terminal emulator with native macOS UI	homebrew-latest				Verified with Homebrew Formulae API on 2026-06-05
+terminal	warp	Warp	cask	warp	no	Rust-based terminal with developer workflow features	homebrew-latest				Verified with Homebrew Formulae API on 2026-06-05
+ai	codex-cli	Codex CLI	cask	codex	no	OpenAI command-line coding agent	homebrew-latest				Verified with brew info --cask codex on 2026-06-02
+ai	codex-desktop	Codex Desktop	cask	codex-app	no	OpenAI desktop app for managing Codex coding agents	homebrew-latest				Verified with Homebrew Formulae API on 2026-06-05
+ai	chatgpt-desktop	ChatGPT Desktop	cask	chatgpt	no	OpenAI ChatGPT desktop app, separate from Codex; requires macOS 14+ and Apple Silicon	homebrew-latest		14	arm64	Verified with Homebrew Formulae API on 2026-06-05
+ai	claude-code-cli	Claude Code CLI	cask	claude-code	no	Anthropic terminal-based coding assistant	homebrew-latest				Verified with Homebrew Formulae API on 2026-06-05
+ai	claude-code-desktop	Claude Code Desktop	cask	claude	no	Claude Desktop app with Claude Code graphical workflows	homebrew-latest				Verified with Homebrew Formulae API on 2026-06-05
+ai	pi-cli	Pi CLI	formula	pi-coding-agent	no	Minimal extensible terminal coding harness	homebrew-latest				Verified with Homebrew Formulae API on 2026-06-05
+ai	opencode-cli	OpenCode CLI	formula	opencode	no	AI coding agent built for the terminal	homebrew-latest				Verified with Homebrew Formulae API on 2026-06-05
+ai	opencode-desktop	OpenCode Desktop	cask	opencode-desktop	no	Desktop client for the OpenCode coding agent	homebrew-latest				Verified with Homebrew Formulae API on 2026-06-05
+browser	chrome	Google Chrome	cask	google-chrome	yes	Mainstream browser	homebrew-latest				Verified with brew info --cask google-chrome on 2026-06-02
+browser	firefox	Firefox	cask	firefox	no	Open-source browser	homebrew-latest				Verified with brew info --cask firefox on 2026-06-02
+browser	brave	Brave	cask	brave-browser	no	Privacy-focused browser	homebrew-latest				Verified with brew info --cask brave-browser on 2026-06-02
+browser	zen	Zen Browser	cask	zen	no	Gecko-based browser with a privacy-focused interface	homebrew-latest				Verified with Homebrew Formulae API on 2026-06-05
+communication	slack	Slack	cask	slack	no	Team messaging and collaboration app	homebrew-latest				Verified with Homebrew Formulae API on 2026-06-05
+communication	teams	Microsoft Teams	cask	microsoft-teams	no	Microsoft team chat and video meetings app	homebrew-latest				Verified with Homebrew Formulae API on 2026-06-05
+runtime	node-npm	Node.js/npm	external	nvm	no	Node.js runtime plus npm package manager	nvm	latest,lts			External version manager via nvm
+runtime	bun	Bun	external	bun.com/install	no	JavaScript runtime, package manager, and bundler	bun-installer	latest			Official Bun installer
+devops	gh	GitHub CLI	formula	gh	yes	GitHub from the terminal	homebrew-latest				Verified with brew info gh on 2026-06-02
+devops	aws-cli	AWS CLI	formula	awscli	no	Amazon Web Services command-line interface	homebrew-latest				Verified with brew info awscli on 2026-06-02
+devops	awsume	awsume	formula	awsume	no	AWS role and account switching helper	homebrew-latest				Verified with Homebrew Formulae API on 2026-06-05
+infra	terraform	Terraform	version-manager	tenv:tf	no	HashiCorp infrastructure-as-code CLI	tenv	latest			Managed by tenv
+infra	opentofu	OpenTofu	version-manager	tenv:tofu	no	Open-source Terraform-compatible IaC CLI	tenv	latest			Managed by tenv
+infra	terraspace	Terraspace	tap-formula	boltops-tools/software/terraspace	no	Framework for Terraform/OpenTofu project structure and workflows	homebrew-latest				Verified with Terraspace Homebrew install docs on 2026-06-05
+infra	terragrunt	Terragrunt	version-manager	tenv:tg	no	Terraform/OpenTofu wrapper for DRY configs	tenv	latest			Managed by tenv
+containers	orbstack	OrbStack	cask	orbstack	no	Fast Docker and Linux machine runtime for macOS; requires macOS 14+	homebrew-latest		14		Verified with Homebrew Formulae API on 2026-06-05
+containers	docker-desktop	Docker Desktop	cask	docker-desktop	no	Docker GUI and runtime bundle for macOS; requires macOS 14+	homebrew-latest		14		Verified with Homebrew Formulae API on 2026-06-05
+containers	docker-cli	Docker CLI	formula	docker	no	Standalone Docker command-line client	homebrew-latest				Verified with Homebrew Formulae API on 2026-06-05
+containers	colima	Colima	formula	colima	no	Container runtime for macOS with minimal setup	homebrew-latest				Verified with brew info colima on 2026-06-02
+productivity	raycast	Raycast	cask	raycast	no	Launcher and productivity utility	homebrew-latest				Verified with brew info --cask raycast on 2026-06-02
