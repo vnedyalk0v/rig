@@ -1234,7 +1234,10 @@ case "\$1:\$2:\$3:\$4" in
 esac
 case "\$1" in
   fetch)
-    exit 0
+    if [ "\$*" = "fetch origin main" ]; then
+      exit 0
+    fi
+    exit 16
     ;;
   pull)
     if [ "\$*" = "pull --ff-only origin main" ]; then
@@ -1255,7 +1258,7 @@ out="$TEST_TMP/self-update-origin-match.out"
 rm -f "$self_update_match_git_log"
 PATH="$fake_darwin_bin:$self_update_match_git_bin:$PATH" run_capture "$out" ./rig self-update
 assert_success "$?" "rig self-update accepts canonical matching origins"
-assert_contains "$self_update_match_git_log" "fetch origin" "self-update matching origin fetches"
+assert_contains "$self_update_match_git_log" "fetch origin main" "self-update pins fetch to validated origin and current branch"
 assert_contains "$self_update_match_git_log" "pull --ff-only origin main" "self-update pins pull to validated origin and current branch"
 
 if [ "$(uname -s 2>/dev/null)" = "Darwin" ]; then
