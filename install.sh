@@ -11,11 +11,12 @@ usage() {
 Usage:
   install.sh [--dry-run] [--repo-url <url>] [--branch <name>]
 
-Installs or updates the local rig command under:
+Installs or updates the local rig command, then starts rig install.
+
+Bootstrap paths:
   ~/.local/share/rig
   ~/.local/bin/rig
 
-After bootstrap, run rig install to set up workstation packages.
 Use --dry-run to inspect bootstrap steps without creating or changing files.
 EOF
 }
@@ -33,13 +34,63 @@ validate_branch_name() {
   return 0
 }
 
-validate_repo_url() {
-  case "$1" in
-    https://*|git@github.com:*)
-      return 0
+canonical_repo_identity() {
+  local url path owner repo
+  url=$1
+  case "$url" in
+    https://github.com/*)
+      path=${url#https://github.com/}
+      ;;
+    git@github.com:*)
+      path=${url#git@github.com:}
+      ;;
+    *)
+      return 1
       ;;
   esac
-  return 1
+  path=${path%.git}
+  owner=${path%%/*}
+  repo=${path#*/}
+  if [ "$owner" = "$path" ] || [ "$owner" = "" ] || [ "$repo" = "" ]; then
+    return 1
+  fi
+  case "$owner" in
+    *[!A-Za-z0-9._-]*)
+      return 1
+      ;;
+  esac
+  case "$repo" in
+    *[!A-Za-z0-9._-]*)
+      return 1
+      ;;
+  esac
+  printf '%s/%s\n' "$owner" "$repo"
+}
+
+validate_repo_url() {
+  canonical_repo_identity "$1" >/dev/null 2>&1
+}
+
+check_existing_clone_origin() {
+  local actual_origin expected_identity actual_identity
+  if ! actual_origin=$(git -C "$install_root" remote get-url origin 2>/dev/null); then
+    error "existing rig clone has no readable origin remote: $install_root"
+    return 1
+  fi
+  if ! expected_identity=$(canonical_repo_identity "$repo_url"); then
+    error "invalid repo URL: $repo_url"
+    return 1
+  fi
+  if ! actual_identity=$(canonical_repo_identity "$actual_origin"); then
+    error "existing rig clone origin mismatch: expected $repo_url, found $actual_origin"
+    error "Remove $install_root or rerun with a trusted GitHub repo URL that matches the existing clone."
+    return 1
+  fi
+  if [ "$actual_identity" != "$expected_identity" ]; then
+    error "existing rig clone origin mismatch: expected $repo_url, found $actual_origin"
+    error "Remove $install_root or rerun with a trusted GitHub repo URL that matches the existing clone."
+    return 1
+  fi
 }
 
 require_macos() {
@@ -129,6 +180,8 @@ if [ "$dry_run" = "yes" ]; then
   printf '[plan] require git for non-dry bootstrap\n'
   printf '[plan] clone or update %s branch %s into %s\n' "$repo_url" "$branch" "$install_root"
   printf '[plan] create symlink %s -> %s\n' "$rig_link" "$rig_target"
+  printf '[plan] start %s install after bootstrap\n' "$rig_link"
+  printf '[plan] use %s install --dry-run to preview Homebrew prerequisite and tool selection after bootstrap\n' "$rig_link"
   exit 0
 fi
 
@@ -142,6 +195,8 @@ fi
 mkdir -p "$install_root" "$bin_dir" || exit 1
 
 if [ -d "$install_root/.git" ]; then
+  check_existing_clone_origin || exit 1
+  git -C "$install_root" config rig.expectedOrigin "$repo_url" || exit 1
   (
     cd "$install_root" || exit 1
     git fetch origin "$branch" || exit 1
@@ -154,6 +209,7 @@ elif [ -e "$install_root" ] && [ "$(find "$install_root" -mindepth 1 -maxdepth 1
 else
   rmdir "$install_root" 2>/dev/null || true
   git clone --branch "$branch" -- "$repo_url" "$install_root" || exit 1
+  git -C "$install_root" config rig.expectedOrigin "$repo_url" || exit 1
 fi
 
 check_rig_link_available || exit 1
@@ -162,4 +218,5 @@ if [ ! -L "$rig_link" ] && [ ! -e "$rig_link" ]; then
 fi
 
 printf 'rig command installed at %s\n' "$rig_link"
-printf 'Next: run %s install (or %s install --dry-run to preview)\n' "$rig_link" "$rig_link"
+printf 'Starting rig install...\n'
+"$rig_link" install

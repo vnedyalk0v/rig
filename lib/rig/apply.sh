@@ -153,7 +153,34 @@ rig_apply_macos_defaults() {
   if [ ! -s "$script_path" ]; then
     return 0
   fi
+  rig_validate_generated_defaults_script "$script_path" || return 1
   bash "$script_path"
+}
+
+rig_brewfile_has_entries() {
+  local brewfile
+  brewfile=$1
+  if [ ! -f "$brewfile" ]; then
+    return 1
+  fi
+  grep -v '^[[:space:]]*#' "$brewfile" | grep -v '^[[:space:]]*$' >/dev/null 2>&1
+}
+
+rig_install_plan_has_entries() {
+  local plan_file line
+  plan_file=$1
+  if [ ! -f "$plan_file" ]; then
+    return 1
+  fi
+  while IFS= read -r line || [ "$line" != "" ]; do
+    case "$line" in
+      ""|"id"$'\t'*)
+        continue
+        ;;
+    esac
+    return 0
+  done <"$plan_file"
+  return 1
 }
 
 rig_apply_install() {
@@ -164,7 +191,7 @@ rig_apply_install() {
 
   rig_validate_catalogs || return 1
 
-  if [ -f "$brewfile" ] && grep -v '^[[:space:]]*#' "$brewfile" | grep -v '^[[:space:]]*$' >/dev/null 2>&1; then
+  if rig_brewfile_has_entries "$brewfile"; then
     rig_ensure_homebrew || return 1
     rig_brew_bundle_apply "$brewfile" || return 1
   fi

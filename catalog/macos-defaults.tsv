@@ -1,4 +1,4 @@
-id	label	description	command	restart_hint
-finder-show-hidden-files	Show hidden files	Show hidden files in Finder	defaults write com.apple.finder AppleShowAllFiles -bool true	Finder restart required
-finder-show-extensions	Show file extensions	Show all filename extensions in Finder	defaults write NSGlobalDomain AppleShowAllExtensions -bool true	Finder restart recommended
-dock-autohide	Auto-hide Dock	Automatically hide and show the Dock	defaults write com.apple.dock autohide -bool true	Dock restart required
+id	label	description	domain	key	type	value	restart_hint
+finder-show-hidden-files	Show hidden files	Show hidden files in Finder	com.apple.finder	AppleShowAllFiles	bool	true	Finder restart required
+finder-show-extensions	Show file extensions	Show all filename extensions in Finder	NSGlobalDomain	AppleShowAllExtensions	bool	true	Finder restart recommended
+dock-autohide	Auto-hide Dock	Automatically hide and show the Dock	com.apple.dock	autohide	bool	true	Dock restart required

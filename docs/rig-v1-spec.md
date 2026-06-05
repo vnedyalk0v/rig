@@ -29,11 +29,14 @@ As of 2026-06-02, v1 core install functionality is implemented:
 
 Implemented:
 
-- `install.sh --dry-run` and bootstrap clone/symlink for the local `rig` command.
+- `install.sh --dry-run` and bootstrap clone/symlink for the local `rig` command,
+  followed by the `rig install` setup flow in normal bootstrap mode.
 - `rig install` (interactive and flag-driven), config writes under
   `~/.config/rig/`, Homebrew Bundle apply, external install-plan replay
   (nvm, tenv, bun), macOS defaults script generation/apply, and idempotent shell
   profile managed blocks.
+- Homebrew prerequisite preflight before interactive selection, with explicit
+  approval in interactive mode and `--yes` for non-interactive installation.
 - `rig list`, `rig doctor`, `rig dry-run`, `rig install --dry-run`,
   `rig install --write-config-only`, `rig install --from-config`,
   `rig self-update`, `rig update-tools`, and `rig version`.
@@ -57,7 +60,7 @@ These were settled during brainstorming and drive the implementation:
 - **Catalog format:** TSV (no `jq`/`yq` dependency on a fresh Mac).
 - **Reproducibility:** A committable `Brewfile` is the source of truth for selected Homebrew-native packages (restored with `brew bundle`); a separate install-plan file records version-managed and external tools; a re-runnable `macos-defaults.sh` records opt-in macOS tweaks, since a `Brewfile` cannot express those. `rig` orchestrates all of them. v1 manages a single configuration per machine, not multiple named profiles.
 - **Modes:** Interactive prompts plus a non-interactive mode (flags, an existing rig config, a bring-your-own Brewfile, or a bring-your-own install plan).
-- **Dry-run:** `rig dry-run` and `rig install --dry-run` simulate the selected setup without installing packages, running `brew bundle`, editing shell startup files, writing `~/.config/rig/`, applying macOS defaults, creating LaunchAgents, or otherwise changing the operating system. The output shows what would happen, including selected packages, generated Brewfile content, shell/profile edits, macOS preference changes, and update-automation changes.
+- **Dry-run:** `rig dry-run` and `rig install --dry-run` simulate the selected setup without installing packages, running `brew bundle`, editing shell startup files, writing `~/.config/rig/`, applying macOS defaults, creating LaunchAgents, or otherwise changing the operating system. The output shows what would happen, including the Homebrew prerequisite step, selected packages, generated Brewfile content, shell/profile edits, macOS preference changes, and update-automation changes.
 - **Selection:** Multi-select within each category — the user can choose one, several, or all tools per category (e.g. multiple IDEs or multiple browsers), never one-per-category.
 - **Descriptions:** Every catalog item has a short description shown in prompts, lists, and dry-run output so users understand what they are selecting.
 - **Versioned developer tools:** Node.js/npm, Bun, Terraform, OpenTofu, Terragrunt, and Terraspace are selectable catalog items. `rig` asks for "latest" or a specific version where the chosen install strategy supports it. Use `nvm` for Node.js/npm. Use `tenv` for Terraform, OpenTofu, and Terragrunt version management; `tenv` also supports Atmos if that tool is added later. Use Bun's official installer for specific Bun versions and Homebrew only when the user wants the latest Homebrew-managed Bun. Terraspace is latest-only in v1 through its Homebrew tap unless a safe, maintainable version-pinning path is explicitly added.
@@ -85,8 +88,15 @@ The remote bootstrap script should only do the minimum:
 - Verify the OS is macOS.
 - Verify required system tools exist or provide a clear error.
 - Parse bootstrap arguments such as `--dry-run` before doing any install or clone step.
-- Install Homebrew if missing, except in dry-run mode.
-- Clone or update the bootstrap repo under the user's home directory, except in dry-run mode.
+- Check Homebrew before tool selection. If Homebrew is missing, ask the user
+  before installing it; non-interactive installs require explicit `--yes`.
+  Dry-run mode prints the same prerequisite decision path without installing
+  Homebrew.
+- Clone or update the bootstrap repo under the user's home directory, except
+  in dry-run mode. Existing clones must have an `origin` that canonically
+  matches the requested or default GitHub repository before any fetch, pull, or
+  local `rig` execution. The trusted origin is recorded in the local clone for
+  later self-update validation.
 - Add or suggest a command path such as `~/.local/bin/rig`, except in dry-run mode.
 - Start the interactive installer, or print the equivalent planned steps in dry-run mode.
 
@@ -125,6 +135,14 @@ The official installation docs also note the default supported prefixes:
 
 `rig` should handle both paths and run the equivalent of `brew shellenv` after installation so the current session can use `brew` immediately.
 
+Homebrew installation is a prerequisite step, not an implicit side effect of
+package apply. If `brew` is already available, `rig` reports the detected path
+and continues. If `brew` is missing during an interactive install, `rig` explains
+that Homebrew is required and asks before invoking the official installer. In
+non-interactive install mode, `rig` must not prompt or silently install
+Homebrew; it fails unless the user provided `--yes`. Dry-run mode prints the
+same prerequisite step and never invokes the Homebrew installer.
+
 ## Homebrew Bundle and Brewfile Strategy
 
 Homebrew Bundle is the strongest install engine for the Homebrew-native part of this project because it gives a declarative install format while still supporting many package types.
@@ -146,6 +164,11 @@ The interactive tool collects the user's choices and generates the canonical `Br
 
 Some requested developer and AI tools may need a versioned installer, an npm/Bun-based installer, or a vendor-specific installer instead of a plain Brewfile entry. Those items still live in the same catalog, but their install strategy must be explicit and auditable. v1 should prefer Homebrew/Brewfile-native installation when available; if a tool cannot be installed that way, `rig` records and displays the separate install step and includes it in dry-run output.
 
+Generated Brewfile entries use non-interpolating Ruby string forms and strict
+catalog validation for Brewfile-native package names and labels. Catalog data
+must not be able to introduce Ruby interpolation or other executable Brewfile
+DSL content.
+
 ## Version Manager Strategy
 
 Homebrew Bundle is not a version lockfile. It can install current formulae/casks and avoid upgrades with `--no-upgrade`, but it does not provide arbitrary package-version selection. Tools where the user naturally expects "latest or a specific version" need dedicated version-management behavior:
@@ -163,13 +186,17 @@ Reproducibility is the core value of a bootstrap tool. A `Brewfile` is the de-fa
 
 - **Brewfile (canonical for packages):** Selected formulae, casks, Mac App Store apps, and VS Code extensions are written to a `Brewfile`. This is the source of truth for packages, restored on any machine with `brew bundle --file=~/.config/rig/Brewfile`.
 - **External install plan:** Selected tools that cannot be represented in a Brewfile are written to a separate, auditable install-plan file with the chosen install strategy and version. `rig` replays that file after the Brewfile step and includes it in dry-run output.
-- **macOS preferences script:** The chosen opt-in tweaks are written to a re-runnable, idempotent `macos-defaults.sh` (a `Brewfile` cannot represent `defaults write` settings).
+- **macOS preferences script:** The chosen opt-in tweaks are written to a
+  re-runnable, idempotent `macos-defaults.sh` (a `Brewfile` cannot represent
+  `defaults write` settings). The script is generated from structured catalog
+  fields, not raw shell command text, and replay rejects non-generated command
+  shapes before executing the script.
 
 `rig` orchestrates these files during install. The user can commit them to their own dotfiles repo and replay them on a brand-new machine. v1 manages a single configuration per machine; multiple named profiles are out of scope.
 
 ## Interactive and Non-Interactive Modes
 
-**Interactive (default):** The installer asks questions by category instead of presenting one huge list. Within each category the user can select **one, several, or all** items — selection is multi-select, never locked to a single tool per category. For example, under IDEs a user can pick both Visual Studio Code and Cursor; under browsers they can pick Chrome, Firefox, and Brave together. Versioned tools such as Node.js/npm, Bun, Terraform, OpenTofu, and Terragrunt ask a follow-up version question when the selected install strategy supports it. With `gum`, this maps to a multi-select (`gum choose --no-limit`) checklist; the plain-Bash fallback accepts a space- or comma-separated list of choices.
+**Interactive (default):** The installer asks questions by category instead of presenting one huge list. Within each category the user can select **one, several, or all** items — selection is multi-select, never locked to a single tool per category. For example, under IDEs a user can pick both Visual Studio Code and Cursor; under browsers they can pick Chrome, Firefox, and Brave together. Versioned tools such as Node.js/npm, Bun, Terraform, OpenTofu, and Terragrunt ask a follow-up version question when the selected install strategy supports it. With `gum`, this maps to a multi-select (`gum choose --no-limit`) checklist; the plain-Bash fallback renders a keyboard checklist where Up/Down moves, Space toggles selection, and Enter continues. The fallback rows show the tool label, catalog id, and description without requiring numeric input.
 
 Example categories:
 
@@ -187,7 +214,13 @@ Example categories:
 - Fonts: JetBrains Mono, Fira Code, Hack Nerd Font.
 - macOS preferences: a few minimal, opt-in tweaks (see below).
 
-For prompt UI, `gum` is an optional dependency. Its project provides ready-to-use shell utilities for choices, confirmations, and input prompts. `rig` uses `gum` when available, and provides a plain Bash fallback so the installer still works on a clean Mac before anything is installed.
+For prompt UI, `gum` is an optional dependency. Its project provides ready-to-use shell utilities for choices, confirmations, and input prompts. `rig` uses `gum` when available in a real terminal, and provides a plain Bash fallback so the installer still works on a clean Mac before anything is installed. The plain Bash fallback renders checkbox-style multi-select lists with keyboard navigation and does not require typing package numbers. Interactive installs show a final review grouped by category before writing config or applying packages; actual installs require approval at that review step.
+
+Interactive selection requires a real terminal. If `rig install` or
+`rig install --dry-run` would need prompts but stdin is not a terminal, `rig`
+exits with a clear error instead of dumping every category. Automation should
+use explicit `--select`, `--defaults`, `--category`, and `--version` flags or
+`--from-config`.
 
 **Non-interactive:** For automation and reproducible re-runs, `rig` also supports a non-interactive mode driven by any of:
 
@@ -195,9 +228,11 @@ For prompt UI, `gum` is an optional dependency. Its project provides ready-to-us
 - An existing rig configuration (the `Brewfile`, external install plan, and `macos-defaults.sh` under `~/.config/rig/`).
 - A user-supplied `Brewfile` and/or install plan (bring-your-own).
 
-In non-interactive mode there are no prompts; selections come from the chosen source.
+In non-interactive mode there are no prompts; selections come from the chosen
+source. If Homebrew is missing and the command will actually install packages,
+the user must pass `--yes` to approve installing Homebrew.
 
-**Dry-run:** Dry-run is available for both interactive and non-interactive flows. It validates the requested selections, resolves package/install strategies, and prints the exact install plan, but it must not run installers or write generated state. This is the safe test path for demos, CI smoke checks, and verifying that the catalog and prompt logic work without changing the user's Mac.
+**Dry-run:** Dry-run is available for both interactive and non-interactive flows. It validates the requested selections, resolves package/install strategies, and prints the exact install plan, but it must not run installers or write generated state. Dry-run output starts with a short summary of counts, then prints the raw Brewfile, external install plan, macOS defaults, and shell/profile edit preview for auditability. This is the safe test path for demos, CI smoke checks, and verifying that the catalog and prompt logic work without changing the user's Mac.
 
 ## Catalog Design
 
@@ -250,6 +285,16 @@ macOS stores most settings in a database changed via `defaults write` (and `kill
 
 Anything that changes deeper system behavior is deferred. Every tweak must be explicitly chosen by the user, and the chosen tweaks are written to the re-runnable `macos-defaults.sh` described under Reproducibility.
 
+The macOS defaults catalog is structured as:
+
+```text
+id	label	description	domain	key	type	value	restart_hint
+```
+
+v1 supports `type=bool` with `value=true|false`. `rig` renders these rows from
+fixed `defaults write '<domain>' '<key>' -bool <value>` templates plus the
+allowlisted Finder/Dock restart commands.
+
 ## Self-Update
 
 The tool lives locally after the first run, preferably under:
@@ -269,6 +314,7 @@ Recommended user-facing commands:
 ```text
 rig install
 rig install --dry-run
+rig install --yes --select gh
 rig dry-run
 rig list
 rig doctor
@@ -277,7 +323,11 @@ rig update-tools
 rig version
 ```
 
-`rig self-update` updates only the bootstrap tool itself, normally by running a fast-forward-only Git pull in the local clone. `rig update-tools` updates installed packages separately through Homebrew.
+`rig self-update` updates only the bootstrap tool itself, normally by running a
+fast-forward-only Git pull in the local clone. Before fetching, it verifies the
+clone `origin` against the trusted origin recorded by bootstrap, falling back
+to the default public GitHub repository for existing pre-record clones.
+`rig update-tools` updates installed packages separately through Homebrew.
 
 Keeping these separate avoids surprising users. Updating the installer script and upgrading all workstation software are different operations.
 

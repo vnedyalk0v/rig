@@ -21,6 +21,7 @@ opt-in macOS defaults scripts, optional Homebrew auto-update setup, and
 
 Keep the current protections covered: non-macOS commands fail before rendering
 plans or invoking update work, dry-run paths create no user or system state,
+Homebrew installation requires interactive approval or explicit `--yes`,
 generated shell edits stay idempotent, install-plan replay validates catalog
 identity and strategy before invoking external installers, unsafe bootstrap
 repository URLs and option-like branch names are rejected, and command-path
@@ -70,6 +71,8 @@ Contributions should preserve these rules:
 
 - `--dry-run` must not install packages, write generated state, edit shell
   files, apply `defaults`, or create LaunchAgents.
+- Missing Homebrew must not be installed silently; require an interactive
+  approval prompt or explicit `--yes`.
 - Shell edits must be idempotent and use managed markers.
 - External installers must be explicit, documented, and shown in dry-run output.
 - Version-manager and package-manager commands must quote user-controlled

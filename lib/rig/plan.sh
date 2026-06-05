@@ -286,22 +286,22 @@ rig_render_brewfile_line() {
 
   case "$kind" in
     formula)
-      printf 'brew "%s"\n' "$(rig_escape_brew_string "$package")"
+      printf "brew '%s'\n" "$(rig_escape_brew_string "$package")"
       ;;
     cask)
-      printf 'cask "%s"\n' "$(rig_escape_brew_string "$package")"
+      printf "cask '%s'\n" "$(rig_escape_brew_string "$package")"
       ;;
     mas)
-      printf 'mas "%s", id: %s\n' "$(rig_escape_brew_string "$label")" "$package"
+      printf "mas '%s', id: %s\n" "$(rig_escape_brew_string "$label")" "$package"
       ;;
     vscode)
-      printf 'vscode "%s"\n' "$(rig_escape_brew_string "$package")"
+      printf "vscode '%s'\n" "$(rig_escape_brew_string "$package")"
       ;;
     tap-formula)
       tap_name=$(rig_escape_brew_string "${package%/*}")
       formula_name=$(rig_escape_brew_string "${package##*/}")
-      printf 'tap "%s"\n' "$tap_name"
-      printf 'brew "%s"\n' "$formula_name"
+      printf "tap '%s'\n" "$tap_name"
+      printf "brew '%s'\n" "$formula_name"
       ;;
   esac
 }
@@ -359,7 +359,7 @@ rig_emit_install_plan_preview() {
 }
 
 rig_emit_macos_defaults() {
-  local selected_defaults mode selected_default row _id _label _description command_text restart_hint restart_cmds
+  local selected_defaults mode selected_default row _id _label _description domain key value_type value restart_hint restart_cmds
   selected_defaults=$1
   mode=$2
   restart_cmds=
@@ -372,8 +372,12 @@ rig_emit_macos_defaults() {
       continue
     fi
     row=$(rig_lookup_default "$selected_default")
-    IFS="$RIG_TSV_DELIMITER" read -r _id _label _description command_text restart_hint < <(printf '%s\n' "$row")
-    printf '%s\n' "$command_text"
+    IFS="$RIG_TSV_DELIMITER" read -r _id _label _description domain key value_type value restart_hint < <(printf '%s\n' "$row")
+    case "$value_type" in
+      bool)
+        printf "defaults write '%s' '%s' -bool %s\n" "$domain" "$key" "$value"
+        ;;
+    esac
     if [ "$mode" = "script" ]; then
       case "$restart_hint" in
         *Finder*)
@@ -417,6 +421,44 @@ rig_count_shell_edits_needed() {
   printf '%s\n' "$count"
 }
 
+rig_count_homebrew_selected() {
+  local selected_tools selected_id row kind count _category _id _label _package _default_flag _description _version_strategy _versions _notes
+  selected_tools=$1
+  count=0
+  while IFS= read -r selected_id || [ "$selected_id" != "" ]; do
+    if [ "$selected_id" = "" ]; then
+      continue
+    fi
+    row=$(rig_lookup_tool "$selected_id")
+    IFS="$RIG_TSV_DELIMITER" read -r _category _id _label kind _package _default_flag _description _version_strategy _versions _notes < <(printf '%s\n' "$row")
+    case "$kind" in
+      formula|cask|tap-formula|mas|vscode)
+        count=$((count + 1))
+        ;;
+    esac
+  done < <(printf '%s\n' "$selected_tools")
+  printf '%s\n' "$count"
+}
+
+rig_count_external_selected() {
+  local selected_tools selected_id row kind count _category _id _label _package _default_flag _description _version_strategy _versions _notes
+  selected_tools=$1
+  count=0
+  while IFS= read -r selected_id || [ "$selected_id" != "" ]; do
+    if [ "$selected_id" = "" ]; then
+      continue
+    fi
+    row=$(rig_lookup_tool "$selected_id")
+    IFS="$RIG_TSV_DELIMITER" read -r _category _id _label kind _package _default_flag _description _version_strategy _versions _notes < <(printf '%s\n' "$row")
+    case "$kind" in
+      external|version-manager)
+        count=$((count + 1))
+        ;;
+    esac
+  done < <(printf '%s\n' "$selected_tools")
+  printf '%s\n' "$count"
+}
+
 rig_reset_plan_globals() {
   RIG_PLAN_SELECT=
   RIG_PLAN_DEFAULTS=
@@ -425,10 +467,13 @@ rig_reset_plan_globals() {
   RIG_PLAN_BREWFILE=
   RIG_PLAN_INSTALL_PLAN=
   RIG_PLAN_DRY_RUN=no
+  RIG_PLAN_YES=no
   RIG_PLAN_WRITE_CONFIG_ONLY=no
   RIG_PLAN_FROM_CONFIG=no
   RIG_PLAN_AUTO_UPDATE=no
   RIG_PLAN_VERSION_MAP=
+  RIG_PLAN_SELECTED_TOOLS=
+  RIG_PLAN_SELECTED_DEFAULTS=
   RIG_PLAN_SELECT_SEEN=no
   RIG_PLAN_DEFAULTS_SEEN=no
   RIG_PLAN_CATEGORY_SEEN=no
@@ -460,6 +505,10 @@ rig_parse_plan_args() {
     case "$1" in
       --dry-run)
         RIG_PLAN_DRY_RUN=yes
+        shift
+        ;;
+      --yes)
+        RIG_PLAN_YES=yes
         shift
         ;;
       --write-config-only)
@@ -588,6 +637,22 @@ rig_reject_from_config_selection_flags() {
   return 0
 }
 
+rig_plan_uses_interactive_selection() {
+  if [ "$RIG_PLAN_FROM_CONFIG" = "yes" ]; then
+    return 1
+  fi
+  if [ "$RIG_PLAN_WRITE_CONFIG_ONLY" = "yes" ]; then
+    return 1
+  fi
+  if [ "$RIG_PLAN_SELECT_SEEN" = "yes" ] || [ "$RIG_PLAN_DEFAULTS_SEEN" = "yes" ] || [ "$RIG_PLAN_CATEGORY_SEEN" = "yes" ] || [ "$RIG_PLAN_VERSION_SEEN" = "yes" ]; then
+    return 1
+  fi
+  if [ "$RIG_PLAN_BREWFILE_SEEN" = "yes" ] || [ "$RIG_PLAN_INSTALL_PLAN_SEEN" = "yes" ]; then
+    return 1
+  fi
+  return 0
+}
+
 rig_resolve_plan_selections() {
   local version_map selected_tools selected_defaults
   version_map=
@@ -626,6 +691,19 @@ rig_finish_install_apply() {
   fi
 }
 
+rig_from_config_needs_homebrew_preflight() {
+  if [ "$RIG_PLAN_AUTO_UPDATE" = "yes" ]; then
+    return 0
+  fi
+  if rig_brewfile_has_entries "$(rig_brewfile_path)"; then
+    return 0
+  fi
+  if rig_install_plan_has_entries "$(rig_install_plan_path)"; then
+    return 0
+  fi
+  return 1
+}
+
 rig_write_plan_config() {
   local brewfile_content install_plan_content defaults_content brewfile_path plan_path defaults_path
   rig_config_ensure_dir || return 1
@@ -642,6 +720,9 @@ rig_write_plan_config() {
   brewfile_content=$(rig_emit_brewfile_content "$RIG_PLAN_SELECTED_TOOLS")
   install_plan_content=$(rig_emit_install_plan_content "$RIG_PLAN_SELECTED_TOOLS" "$RIG_PLAN_VERSION_MAP")
   defaults_content=$(rig_emit_macos_defaults_script "$RIG_PLAN_SELECTED_DEFAULTS")
+  if ! printf '%s\n' "$defaults_content" | rig_validate_generated_defaults_content; then
+    return 1
+  fi
 
   rig_config_write_atomic "$brewfile_path" "$brewfile_content" || return 1
   rig_config_write_atomic "$plan_path" "$install_plan_content" || return 1
@@ -678,6 +759,47 @@ rig_render_auto_update_preview() {
   printf 'Would run: brew autoupdate start --upgrade --cleanup --greedy\n\n'
 }
 
+rig_count_preview_lines() {
+  local value count line
+  value=$1
+  count=0
+  while IFS= read -r line || [ "$line" != "" ]; do
+    if [ "$line" = "" ]; then
+      continue
+    fi
+    count=$((count + 1))
+  done < <(printf '%s\n' "$value")
+  printf '%s\n' "$count"
+}
+
+rig_count_brewfile_preview_selections() {
+  local value count line
+  value=$1
+  count=0
+  while IFS= read -r line || [ "$line" != "" ]; do
+    case "$line" in
+      ""|"tap "*)
+        continue
+        ;;
+    esac
+    count=$((count + 1))
+  done < <(printf '%s\n' "$value")
+  printf '%s\n' "$count"
+}
+
+rig_render_dry_run_summary() {
+  local brewfile_count external_count defaults_count shell_edit_count
+  brewfile_count=$1
+  external_count=$2
+  defaults_count=$3
+  shell_edit_count=$4
+  printf '# Summary\n'
+  printf 'Homebrew-native packages: %s\n' "$brewfile_count"
+  printf 'External installers: %s\n' "$external_count"
+  printf 'macOS defaults: %s\n' "$defaults_count"
+  printf 'Shell/profile edits: %s\n\n' "$shell_edit_count"
+}
+
 rig_render_dry_run_from_config() {
   local brewfile plan_file defaults_script brewfile_preview external_preview defaults_preview
   local shell_edit_count profile_path login_shell line id strategy package version label
@@ -694,16 +816,12 @@ rig_render_dry_run_from_config() {
   printf 'rig dry-run\n'
   printf 'No packages, config files, shell files, defaults, or LaunchAgents will be changed.\n\n'
 
-  printf '# Brewfile preview\n'
+  rig_homebrew_preflight dry-run "$RIG_PLAN_YES" no || return 1
+
+  brewfile_preview=
   if [ -f "$brewfile" ] && grep -v '^[[:space:]]*#' "$brewfile" | grep -v '^[[:space:]]*$' >/dev/null 2>&1; then
     brewfile_preview=$(grep -v '^[[:space:]]*#' "$brewfile" | grep -v '^[[:space:]]*$' || true)
-    printf '%s\n' "$brewfile_preview"
-  else
-    printf 'No Homebrew-native packages in saved config.\n'
   fi
-  printf '\n'
-
-  printf '# External install plan preview\n'
   external_preview=
   if [ -f "$plan_file" ]; then
     while IFS= read -r line || [ "$line" != "" ]; do
@@ -717,6 +835,27 @@ rig_render_dry_run_from_config() {
 "
     done <"$plan_file"
   fi
+  defaults_preview=
+  if [ -f "$defaults_script" ] && [ -s "$defaults_script" ]; then
+    defaults_preview=$(grep -v '^#!' "$defaults_script" | grep -v '^#' | grep -v '^[[:space:]]*$' | grep -v '^killall ' || true)
+  fi
+  shell_edit_count=$(rig_count_shell_edits_from_plan_file "$plan_file")
+
+  rig_render_dry_run_summary \
+    "$(rig_count_brewfile_preview_selections "$brewfile_preview")" \
+    "$(rig_count_preview_lines "$external_preview")" \
+    "$(rig_count_preview_lines "$defaults_preview")" \
+    "$shell_edit_count"
+
+  printf '# Brewfile preview\n'
+  if [ "$brewfile_preview" != "" ]; then
+    printf '%s\n' "$brewfile_preview"
+  else
+    printf 'No Homebrew-native packages in saved config.\n'
+  fi
+  printf '\n'
+
+  printf '# External install plan preview\n'
   if [ "$external_preview" = "" ]; then
     printf 'No external installers in saved config.\n'
   else
@@ -725,10 +864,6 @@ rig_render_dry_run_from_config() {
   printf '\n'
 
   printf '# macOS defaults preview\n'
-  defaults_preview=
-  if [ -f "$defaults_script" ] && [ -s "$defaults_script" ]; then
-    defaults_preview=$(grep -v '^#!' "$defaults_script" | grep -v '^#' | grep -v '^[[:space:]]*$' | grep -v '^killall ' || true)
-  fi
   if [ "$defaults_preview" = "" ]; then
     printf 'No macOS defaults in saved config.\n'
   else
@@ -737,7 +872,6 @@ rig_render_dry_run_from_config() {
   printf '\n'
 
   printf '# Shell/profile edits preview\n'
-  shell_edit_count=$(rig_count_shell_edits_from_plan_file "$plan_file")
   if profile_path=$(rig_profile_path 2>/dev/null); then
     if [ "$shell_edit_count" -gt 0 ]; then
       printf 'Would add managed rig initialization block to %s.\n' "$profile_path"
@@ -758,15 +892,27 @@ rig_render_dry_run_from_config() {
   fi
 }
 
-rig_render_dry_run_body() {
-  local shell_edit_count profile_path login_shell
-  local brewfile_preview external_preview defaults_preview
-
+rig_print_dry_run_intro() {
   printf 'rig dry-run\n'
   printf 'No packages, config files, shell files, defaults, or LaunchAgents will be changed.\n\n'
+}
+
+rig_render_dry_run_plan_sections() {
+  local shell_edit_count profile_path login_shell
+  local brewfile_preview external_preview defaults_preview
+  local brewfile_count external_count defaults_count
+
+  brewfile_preview=$(rig_emit_brewfile_content "$RIG_PLAN_SELECTED_TOOLS")
+  external_preview=$(rig_emit_install_plan_preview "$RIG_PLAN_SELECTED_TOOLS" "$RIG_PLAN_VERSION_MAP")
+  defaults_preview=$(rig_emit_macos_defaults_preview "$RIG_PLAN_SELECTED_DEFAULTS")
+  shell_edit_count=$(rig_count_shell_edits_needed "$RIG_PLAN_SELECTED_TOOLS")
+  brewfile_count=$(rig_count_homebrew_selected "$RIG_PLAN_SELECTED_TOOLS")
+  external_count=$(rig_count_external_selected "$RIG_PLAN_SELECTED_TOOLS")
+  defaults_count=$(rig_count_lines "$RIG_PLAN_SELECTED_DEFAULTS")
+
+  rig_render_dry_run_summary "$brewfile_count" "$external_count" "$defaults_count" "$shell_edit_count"
 
   printf '# Brewfile preview\n'
-  brewfile_preview=$(rig_emit_brewfile_content "$RIG_PLAN_SELECTED_TOOLS")
   if [ "$brewfile_preview" = "" ]; then
     printf 'No Homebrew-native packages selected.\n'
   else
@@ -775,7 +921,6 @@ rig_render_dry_run_body() {
   printf '\n'
 
   printf '# External install plan preview\n'
-  external_preview=$(rig_emit_install_plan_preview "$RIG_PLAN_SELECTED_TOOLS" "$RIG_PLAN_VERSION_MAP")
   if [ "$external_preview" = "" ]; then
     printf 'No external installers selected.\n'
   else
@@ -784,7 +929,6 @@ rig_render_dry_run_body() {
   printf '\n'
 
   printf '# macOS defaults preview\n'
-  defaults_preview=$(rig_emit_macos_defaults_preview "$RIG_PLAN_SELECTED_DEFAULTS")
   if [ "$defaults_preview" = "" ]; then
     printf 'No macOS defaults selected.\n'
   else
@@ -793,7 +937,6 @@ rig_render_dry_run_body() {
   printf '\n'
 
   printf '# Shell/profile edits preview\n'
-  shell_edit_count=$(rig_count_shell_edits_needed "$RIG_PLAN_SELECTED_TOOLS")
   if profile_path=$(rig_profile_path 2>/dev/null); then
     if [ "$shell_edit_count" -gt 0 ]; then
       printf 'Would add managed rig initialization block to %s.\n' "$profile_path"
@@ -812,6 +955,12 @@ rig_render_dry_run_body() {
   if [ "$RIG_PLAN_AUTO_UPDATE" = "yes" ]; then
     rig_render_auto_update_preview
   fi
+}
+
+rig_render_dry_run_body() {
+  rig_print_dry_run_intro
+  rig_homebrew_preflight dry-run "$RIG_PLAN_YES" no || return 1
+  rig_render_dry_run_plan_sections
 }
 
 rig_render_dry_run() {
@@ -842,8 +991,18 @@ rig_run_install() {
     if [ "$RIG_PLAN_FROM_CONFIG" = "yes" ]; then
       rig_render_dry_run_from_config || return 1
     else
-      rig_prepare_plan_selections || return 1
-      rig_render_dry_run_body
+      if rig_plan_uses_interactive_selection; then
+        rig_require_macos || return 1
+        rig_validate_catalogs || return 1
+        rig_require_interactive_terminal || return 1
+        rig_print_dry_run_intro
+        rig_homebrew_preflight dry-run "$RIG_PLAN_YES" yes || return 1
+        rig_run_interactive_selection || return 1
+        rig_render_dry_run_plan_sections
+      else
+        rig_prepare_plan_selections || return 1
+        rig_render_dry_run_body
+      fi
     fi
     return 0
   fi
@@ -861,11 +1020,24 @@ rig_run_install() {
       rig_print_error "--from-config cannot be combined with --write-config-only"
       return 1
     fi
+    if rig_from_config_needs_homebrew_preflight; then
+      rig_homebrew_preflight install "$RIG_PLAN_YES" no || return 1
+    fi
     rig_finish_install_apply || return 1
     return 0
   fi
 
-  rig_prepare_plan_selections || return 1
+  if rig_plan_uses_interactive_selection; then
+    rig_require_interactive_terminal || return 1
+    rig_homebrew_preflight install "$RIG_PLAN_YES" yes || return 1
+    rig_run_interactive_selection || return 1
+  else
+    rig_prepare_plan_selections || return 1
+    if [ "$RIG_PLAN_WRITE_CONFIG_ONLY" != "yes" ]; then
+      rig_homebrew_preflight install "$RIG_PLAN_YES" no || return 1
+    fi
+  fi
+
   rig_apply_plan_path_overrides
   rig_write_plan_config || return 1
 

@@ -15,15 +15,20 @@ install paths are implemented.
 Current implementation:
 
 - `install.sh --dry-run` renders the bootstrap plan without creating files, and
-  `install.sh` can install or update the local `rig` command.
+  `install.sh` installs or updates the local `rig` command before starting
+  `rig install`.
 - `rig install` writes committable state under `~/.config/rig/` (Brewfile,
   install-plan.tsv, macos-defaults.sh) and applies it via Homebrew Bundle,
   version managers, and defaults scripts.
+- `rig install` checks Homebrew before tool selection. If Homebrew is missing,
+  interactive install asks before installing it; non-interactive install
+  requires `--yes`.
 - `rig install --dry-run`, `rig install --write-config-only`, and
   `rig install --from-config` support preview, config-only, and replay flows.
 - `rig list`, `rig doctor`, `rig dry-run`, `rig self-update`, `rig update-tools`,
   and `rig version` are implemented.
-- Interactive install (no flags) uses optional `gum` with a plain Bash fallback.
+- Interactive install (no flags) uses optional `gum` with a plain Bash keyboard
+  checklist fallback and a final review screen.
 - Non-interactive selection uses `--select`, `--defaults`, `--category`, and
   `--version` flags.
 - TSV catalog validation, multi-select flags, macOS guards, and bootstrap checks
@@ -59,6 +64,12 @@ The bootstrap command is:
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/vnedyalk0v/rig/main/install.sh)"
 ```
 
+That command installs or updates the local `rig` command and then starts the
+interactive setup flow. The flow checks for Homebrew first. If `brew` is
+missing, `rig` explains that Homebrew is required and waits for approval before
+running the official Homebrew installer. After Homebrew is available, `rig`
+shows the selectable tool/software catalog.
+
 The dry-run bootstrap command is:
 
 ```bash
@@ -67,12 +78,15 @@ The dry-run bootstrap command is:
 
 Remote shell execution has real supply-chain risk. The installer should stay
 small and readable, and users should review `install.sh` before running it.
+After bootstrap, use `rig install --dry-run` to exercise the same Homebrew
+prerequisite and selection flow without installing packages or writing config.
 
 ## Commands
 
 ```text
 rig install
 rig install --dry-run
+rig install --yes --select gh
 rig install --write-config-only
 rig install --from-config
 rig dry-run
@@ -84,7 +98,21 @@ rig version
 ```
 
 Run `rig install` with no flags for an interactive setup. Use
-`rig install --dry-run` or `rig dry-run` to preview without changes.
+`rig install --dry-run` or `rig dry-run` to preview without changes. Use
+`--yes` only when a non-interactive install is allowed to install Homebrew if it
+is missing.
+
+Interactive selection requires a real terminal. The plain Bash fallback renders
+checkbox-style multi-select lists by category: use Up/Down to move, Space to
+select or deselect, and Enter to continue. Rows show the tool name, catalog id,
+and description without requiring numeric input. Before applying an interactive
+install, `rig` shows a final review grouped by category and asks for approval.
+If `gum` is installed, `rig` uses its multi-select UI. In scripts, CI, or
+captured shells, pass explicit `--select` and `--defaults` flags instead of
+relying on prompts.
+
+Dry-run output starts with a short summary of package counts before printing the
+raw Brewfile, external install plan, macOS defaults, and shell-edit preview.
 
 ## Local Validation
 
@@ -94,7 +122,7 @@ for f in install.sh rig lib/rig/*.sh scripts/*.sh tests/*.sh; do
 done
 bash tests/run-tests.sh
 ./scripts/validate-catalog.sh
-./rig dry-run --select vscode,chrome,node-npm --defaults finder-show-hidden-files
+./rig install --dry-run --select vscode,chrome,node-npm --defaults finder-show-hidden-files
 ./install.sh --dry-run
 shellcheck install.sh rig lib/rig/*.sh scripts/*.sh tests/*.sh
 actionlint .github/workflows/*.yml

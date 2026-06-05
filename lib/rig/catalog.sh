@@ -19,15 +19,25 @@ rig_defaults_catalog_path() {
 }
 
 rig_field_count() {
-  printf '%s\n' "$1" | awk -F '\t' '{ print NF; exit }'
+  local line tab count rest
+  line=$1
+  tab=$(printf '\t')
+  count=1
+  rest=$line
+
+  while [ "$rest" != "${rest#*"$tab"}" ]; do
+    count=$((count + 1))
+    rest=${rest#*"$tab"}
+  done
+
+  printf '%s\n' "$count"
 }
 
 rig_tsv_to_record() {
-  printf '%s\n' "$1" | awk -F '\t' -v sep="$RIG_TSV_DELIMITER" '{
-    for (i = 1; i <= NF; i++) {
-      printf "%s%s", $i, (i < NF ? sep : ORS)
-    }
-  }'
+  local line tab
+  line=$1
+  tab=$(printf '\t')
+  printf '%s\n' "${line//$tab/$RIG_TSV_DELIMITER}"
 }
 
 rig_validate_id() {
@@ -64,6 +74,33 @@ rig_validate_default_flag() {
       ;;
   esac
   return 1
+}
+
+rig_validate_brewfile_package_value() {
+  case "$1" in
+    ""|*[!A-Za-z0-9._+@-]*|*'#{'*)
+      return 1
+      ;;
+  esac
+  return 0
+}
+
+rig_validate_brewfile_label_value() {
+  case "$1" in
+    ""|*'#{'*)
+      return 1
+      ;;
+  esac
+  return 0
+}
+
+rig_validate_defaults_name() {
+  case "$1" in
+    ""|*[!A-Za-z0-9._-]*)
+      return 1
+      ;;
+  esac
+  return 0
 }
 
 rig_record_field() {
@@ -152,6 +189,7 @@ $id
 rig_validate_tools_row() {
   local catalog_path line_no record
   local category id label kind package default_flag description version_strategy _versions _notes
+  local tap_owner tap_rest tap_name formula_name
   catalog_path=$1
   line_no=$2
   record=$3
@@ -173,28 +211,40 @@ rig_validate_tools_row() {
     rig_print_error "$catalog_path:$line_no: package is required"
     return 1
   fi
-  if [ "$kind" = "tap-formula" ]; then
-    case "$package" in
-      */*)
-        if [ "${package%/*}" = "" ] || [ "${package##*/}" = "" ]; then
-          rig_print_error "$catalog_path:$line_no: invalid tap-formula package: $package"
-          return 1
-        fi
-        ;;
-      *)
+  case "$kind" in
+    formula|cask|vscode)
+      if ! rig_validate_brewfile_package_value "$package"; then
+        rig_print_error "$catalog_path:$line_no: invalid Brewfile package for $kind: $package"
+        return 1
+      fi
+      ;;
+    tap-formula)
+      tap_owner=${package%%/*}
+      tap_rest=${package#*/}
+      tap_name=${tap_rest%%/*}
+      formula_name=${tap_rest#*/}
+      if [ "$tap_owner" = "$package" ] || [ "$tap_name" = "$tap_rest" ] || [ "$formula_name" = "" ] || [ "$formula_name" = "$tap_rest" ]; then
         rig_print_error "$catalog_path:$line_no: invalid tap-formula package: $package"
         return 1
-        ;;
-    esac
-  fi
-  if [ "$kind" = "mas" ]; then
-    case "$package" in
-      ""|*[!0-9]*)
-        rig_print_error "$catalog_path:$line_no: invalid mas id: $package"
+      fi
+      if ! rig_validate_brewfile_package_value "$tap_owner" || ! rig_validate_brewfile_package_value "$tap_name" || ! rig_validate_brewfile_package_value "$formula_name"; then
+        rig_print_error "$catalog_path:$line_no: invalid Brewfile package for $kind: $package"
         return 1
-        ;;
-    esac
-  fi
+      fi
+      ;;
+    mas)
+      case "$package" in
+        ""|*[!0-9]*)
+          rig_print_error "$catalog_path:$line_no: invalid mas id: $package"
+          return 1
+          ;;
+      esac
+      if ! rig_validate_brewfile_label_value "$label"; then
+        rig_print_error "$catalog_path:$line_no: invalid Brewfile label for mas: $label"
+        return 1
+      fi
+      ;;
+  esac
   if ! rig_validate_default_flag "$default_flag"; then
     rig_print_error "$catalog_path:$line_no: invalid default flag: $default_flag"
     return 1
@@ -212,11 +262,11 @@ rig_validate_tools_row() {
 
 rig_validate_defaults_row() {
   local catalog_path line_no record
-  local id label description command_text _restart_hint
+  local id label description domain key value_type value _restart_hint
   catalog_path=$1
   line_no=$2
   record=$3
-  IFS="$RIG_TSV_DELIMITER" read -r id label description command_text _restart_hint < <(printf '%s\n' "$record")
+  IFS="$RIG_TSV_DELIMITER" read -r id label description domain key value_type value _restart_hint < <(printf '%s\n' "$record")
 
   if [ "$label" = "" ]; then
     rig_print_error "$catalog_path:$line_no: label is required"
@@ -226,10 +276,125 @@ rig_validate_defaults_row() {
     rig_print_error "$catalog_path:$line_no: description is required"
     return 1
   fi
-  if [ "$command_text" = "" ]; then
-    rig_print_error "$catalog_path:$line_no: command is required"
+  if ! rig_validate_defaults_name "$domain"; then
+    rig_print_error "$catalog_path:$line_no: invalid defaults domain: $domain"
     return 1
   fi
+  if ! rig_validate_defaults_name "$key"; then
+    rig_print_error "$catalog_path:$line_no: invalid defaults key: $key"
+    return 1
+  fi
+  if [ "$value_type" != "bool" ]; then
+    rig_print_error "$catalog_path:$line_no: unsupported defaults type: $value_type"
+    return 1
+  fi
+  case "$value" in
+    true|false)
+      ;;
+    *)
+      rig_print_error "$catalog_path:$line_no: invalid bool defaults value: $value"
+      return 1
+      ;;
+  esac
+  case "$_restart_hint" in
+    ""|*Finder*|*Dock*)
+      ;;
+    *)
+      rig_print_error "$catalog_path:$line_no: unsupported restart hint: $_restart_hint"
+      return 1
+      ;;
+  esac
+  return 0
+}
+
+rig_validate_generated_defaults_line() {
+  local line quote prefix separator suffix_true suffix_false rest domain key
+  line=$1
+  quote="'"
+  prefix="defaults write $quote"
+  separator="$quote $quote"
+  suffix_true="$quote -bool true"
+  suffix_false="$quote -bool false"
+
+  case "$line" in
+    "$prefix"*)
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+
+  rest=${line#"$prefix"}
+  domain=${rest%%"$quote"*}
+  if ! rig_validate_defaults_name "$domain"; then
+    return 1
+  fi
+  rest=${rest#"$domain"}
+  case "$rest" in
+    "$separator"*)
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+
+  rest=${rest#"$separator"}
+  key=${rest%%"$quote"*}
+  if ! rig_validate_defaults_name "$key"; then
+    return 1
+  fi
+  rest=${rest#"$key"}
+  case "$rest" in
+    "$suffix_true"|"$suffix_false")
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+rig_validate_generated_defaults_script() {
+  local script_path line line_no
+  script_path=$1
+  if [ ! -f "$script_path" ]; then
+    return 0
+  fi
+  line_no=0
+  while IFS= read -r line || [ "$line" != "" ]; do
+    line_no=$((line_no + 1))
+    case "$line" in
+      ""|"#!/bin/bash"|"# Generated by rig. Re-runnable macOS preference tweaks.")
+        ;;
+      "killall Finder 2>/dev/null || true"|"killall Dock 2>/dev/null || true")
+        ;;
+      *)
+        if ! rig_validate_generated_defaults_line "$line"; then
+          rig_print_error "$script_path:$line_no: unsupported macOS defaults command: $line"
+          return 1
+        fi
+        ;;
+    esac
+  done <"$script_path"
+  return 0
+}
+
+rig_validate_generated_defaults_content() {
+  local line line_no
+  line_no=0
+  while IFS= read -r line || [ "$line" != "" ]; do
+    line_no=$((line_no + 1))
+    case "$line" in
+      ""|"#!/bin/bash"|"# Generated by rig. Re-runnable macOS preference tweaks.")
+        ;;
+      "killall Finder 2>/dev/null || true"|"killall Dock 2>/dev/null || true")
+        ;;
+      *)
+        if ! rig_validate_generated_defaults_line "$line"; then
+          rig_print_error "generated macOS defaults:$line_no: unsupported macOS defaults command: $line"
+          return 1
+        fi
+        ;;
+    esac
+  done
   return 0
 }
 
@@ -241,8 +406,8 @@ rig_validate_tools_catalog() {
 
 rig_validate_defaults_catalog() {
   rig_validate_catalog "$1" "macOS defaults" \
-    'id	label	description	command	restart_hint' \
-    5 1 rig_validate_defaults_row
+    'id	label	description	domain	key	type	value	restart_hint' \
+    8 1 rig_validate_defaults_row
 }
 
 rig_validate_catalogs() {
@@ -273,19 +438,25 @@ rig_each_default() {
 }
 
 rig_lookup_record() {
-  local producer wanted id_field record
+  local producer wanted id_field record match found
   producer=$1
   wanted=$2
   id_field=$3
+  match=
+  found=no
   while IFS= read -r record || [ "$record" != "" ]; do
     if [ "$record" = "" ]; then
       continue
     fi
-    if [ "$(rig_record_field "$record" "$id_field")" = "$wanted" ]; then
-      printf '%s\n' "$record"
-      return 0
+    if [ "$found" = "no" ] && [ "$(rig_record_field "$record" "$id_field")" = "$wanted" ]; then
+      match=$record
+      found=yes
     fi
   done < <("$producer")
+  if [ "$found" = "yes" ]; then
+    printf '%s\n' "$match"
+    return 0
+  fi
   return 1
 }
 
@@ -294,7 +465,7 @@ rig_lookup_tool() {
 }
 
 rig_validate_tool_version() {
-  local tool_id version row allowed_versions entry
+  local tool_id version row allowed_versions entry found
   tool_id=$1
   version=$2
   if ! row=$(rig_lookup_tool "$tool_id"); then
@@ -306,30 +477,41 @@ rig_validate_tool_version() {
     rig_print_error "catalog id $tool_id does not support version selection"
     return 1
   fi
+  found=no
   while IFS= read -r entry || [ "$entry" != "" ]; do
     if [ "$entry" = "" ]; then
       continue
     fi
     if [ "$entry" = "$version" ]; then
-      return 0
+      found=yes
     fi
   done < <(rig_join_csv_as_lines "$allowed_versions")
+  if [ "$found" = "yes" ]; then
+    return 0
+  fi
   rig_print_error "unsupported version for $tool_id: $version (allowed: $allowed_versions)"
   return 1
 }
 
 rig_tool_category_exists() {
-  local wanted record category _id _label _kind _package _default_flag _description _version_strategy _versions _notes
+  local wanted record found category _id _label _kind _package _default_flag _description _version_strategy _versions _notes
   wanted=$1
+  found=no
   while IFS= read -r record || [ "$record" != "" ]; do
     if [ "$record" = "" ]; then
       continue
     fi
+    if [ "$found" = "yes" ]; then
+      continue
+    fi
     IFS="$RIG_TSV_DELIMITER" read -r category _id _label _kind _package _default_flag _description _version_strategy _versions _notes < <(printf '%s\n' "$record")
     if [ "$category" = "$wanted" ]; then
-      return 0
+      found=yes
     fi
   done < <(rig_each_tool)
+  if [ "$found" = "yes" ]; then
+    return 0
+  fi
   return 1
 }
 
