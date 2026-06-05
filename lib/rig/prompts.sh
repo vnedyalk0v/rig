@@ -422,13 +422,13 @@ rig_prompt_multi_select() {
 
 rig_prompt_tools_for_category() {
   local category category_label items item_count choice
-  local _category id label _kind _package _default_flag description _version_strategy _versions _min_macos _notes
+  local _category id label _kind _package _default_flag description _version_strategy _versions _min_macos _arch _notes
   local safe_tool_label safe_tool_description
   category=$1
   category_label=$(rig_category_label "$category")
   items=
   item_count=0
-  while IFS="$RIG_TSV_DELIMITER" read -r _category id label _kind _package _default_flag description _version_strategy _versions _min_macos _notes; do
+  while IFS="$RIG_TSV_DELIMITER" read -r _category id label _kind _package _default_flag description _version_strategy _versions _min_macos _arch _notes; do
     if [ "$_category" != "$category" ]; then
       continue
     fi
@@ -532,7 +532,7 @@ rig_prompt_append_label() {
 }
 
 rig_prompt_print_review_tools() {
-  local selected_tools category labels selected_id row row_category _id label _kind _package _default_flag _description _version_strategy _versions _min_macos _notes printed category_label
+  local selected_tools category labels selected_id row row_category _id label _kind _package _default_flag _description _version_strategy _versions _min_macos _arch _notes printed category_label
   selected_tools=$1
   printed=no
   printf 'Tools\n' >&2
@@ -546,7 +546,7 @@ rig_prompt_print_review_tools() {
         continue
       fi
       row=$(rig_lookup_tool "$selected_id")
-      IFS="$RIG_TSV_DELIMITER" read -r row_category _id label _kind _package _default_flag _description _version_strategy _versions _min_macos _notes < <(printf '%s\n' "$row")
+      IFS="$RIG_TSV_DELIMITER" read -r row_category _id label _kind _package _default_flag _description _version_strategy _versions _min_macos _arch _notes < <(printf '%s\n' "$row")
       if [ "$row_category" = "$category" ]; then
         labels=$(rig_prompt_append_label "$labels" "$label")
       fi
@@ -610,10 +610,10 @@ rig_prompt_auto_update() {
 }
 
 rig_each_category() {
-  local seen category _id _label _kind _package _default_flag _description _version_strategy _versions _min_macos _notes
+  local seen category _id _label _kind _package _default_flag _description _version_strategy _versions _min_macos _arch _notes
   seen='
 '
-  while IFS="$RIG_TSV_DELIMITER" read -r category _id _label _kind _package _default_flag _description _version_strategy _versions _min_macos _notes; do
+  while IFS="$RIG_TSV_DELIMITER" read -r category _id _label _kind _package _default_flag _description _version_strategy _versions _min_macos _arch _notes; do
     if rig_seen_contains "$seen" "$category"; then
       continue
     fi
@@ -625,7 +625,7 @@ rig_each_category() {
 
 rig_run_interactive_selection() {
   local category selected_tools selected_defaults version_map tool_id row version _versions category_index category_total
-  local _category _id _label _kind _package _default_flag _description _version_strategy _min_macos _notes auto_update
+  local _category _id _label _kind _package _default_flag _description _version_strategy _min_macos _arch _notes auto_update
   RIG_PLAN_SELECTED_TOOLS=
   RIG_PLAN_SELECTED_DEFAULTS=
   RIG_PLAN_VERSION_MAP=
@@ -649,7 +649,7 @@ rig_run_interactive_selection() {
       selected_tools="${selected_tools}${tool_id}
 "
       row=$(rig_lookup_tool "$tool_id")
-      IFS="$RIG_TSV_DELIMITER" read -r _category _id _label _kind _package _default_flag _description _version_strategy _versions _min_macos _notes < <(printf '%s\n' "$row")
+      IFS="$RIG_TSV_DELIMITER" read -r _category _id _label _kind _package _default_flag _description _version_strategy _versions _min_macos _arch _notes < <(printf '%s\n' "$row")
       if [ "$_versions" != "" ]; then
         if ! version=$(rig_prompt_version "$tool_id" "$_versions"); then
           return 1
@@ -682,6 +682,6 @@ rig_run_interactive_selection() {
   RIG_PLAN_VERSION_MAP=$version_map
   # shellcheck disable=SC2034
   RIG_PLAN_AUTO_UPDATE=$auto_update
-  rig_validate_selected_tools_macos "$selected_tools" || return 1
+  rig_validate_selected_tools_platform "$selected_tools" || return 1
   rig_prompt_review_selection || return 1
 }

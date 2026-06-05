@@ -63,6 +63,22 @@ rig_macos_version_meets_minimum() {
   [ "$current_major" -ge "$minimum_major" ]
 }
 
+rig_machine_arch() {
+  if [ "${RIG_MACHINE_ARCH:-}" != "" ]; then
+    printf '%s\n' "$RIG_MACHINE_ARCH"
+    return 0
+  fi
+  uname -m 2>/dev/null
+}
+
+rig_arch_matches_requirement() {
+  local current required
+  current=$1
+  required=$2
+  [ "$required" = "" ] && return 0
+  [ "$current" = "$required" ]
+}
+
 rig_usage() {
   printf 'Usage:\n'
   printf '  %s\n' "${RIG_INSTALL_USAGE#Usage: }"
