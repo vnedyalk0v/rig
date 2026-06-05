@@ -83,6 +83,15 @@ rig_validate_min_macos() {
   return 0
 }
 
+rig_validate_arch_requirement() {
+  case "$1" in
+    ""|arm64|x86_64)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
 rig_validate_default_flag() {
   case "$1" in
     yes|no)
@@ -204,12 +213,12 @@ $id
 
 rig_validate_tools_row() {
   local catalog_path line_no record
-  local category id label kind package default_flag description version_strategy _versions min_macos _notes
+  local category id label kind package default_flag description version_strategy _versions min_macos arch _notes
   local tap_owner tap_rest tap_name formula_name
   catalog_path=$1
   line_no=$2
   record=$3
-  IFS="$RIG_TSV_DELIMITER" read -r category id label kind package default_flag description version_strategy _versions min_macos _notes < <(printf '%s\n' "$record")
+  IFS="$RIG_TSV_DELIMITER" read -r category id label kind package default_flag description version_strategy _versions min_macos arch _notes < <(printf '%s\n' "$record")
 
   if ! rig_validate_id "$category"; then
     rig_print_error "$catalog_path:$line_no: invalid category: $category"
@@ -275,6 +284,10 @@ rig_validate_tools_row() {
   fi
   if ! rig_validate_min_macos "$min_macos"; then
     rig_print_error "$catalog_path:$line_no: invalid min_macos: $min_macos"
+    return 1
+  fi
+  if ! rig_validate_arch_requirement "$arch"; then
+    rig_print_error "$catalog_path:$line_no: invalid arch: $arch"
     return 1
   fi
   return 0
@@ -420,8 +433,8 @@ rig_validate_generated_defaults_content() {
 
 rig_validate_tools_catalog() {
   rig_validate_catalog "$1" "tools" \
-    'category	id	label	kind	package	default	description	version_strategy	versions	min_macos	notes' \
-    11 2 rig_validate_tools_row
+    'category	id	label	kind	package	default	description	version_strategy	versions	min_macos	arch	notes' \
+    12 2 rig_validate_tools_row
 }
 
 rig_validate_defaults_catalog() {
@@ -514,7 +527,7 @@ rig_validate_tool_version() {
 }
 
 rig_tool_category_exists() {
-  local wanted record found category _id _label _kind _package _default_flag _description _version_strategy _versions _min_macos _notes
+  local wanted record found category _id _label _kind _package _default_flag _description _version_strategy _versions _min_macos _arch _notes
   wanted=$1
   found=no
   while IFS= read -r record || [ "$record" != "" ]; do
@@ -524,7 +537,7 @@ rig_tool_category_exists() {
     if [ "$found" = "yes" ]; then
       continue
     fi
-    IFS="$RIG_TSV_DELIMITER" read -r category _id _label _kind _package _default_flag _description _version_strategy _versions _min_macos _notes < <(printf '%s\n' "$record")
+    IFS="$RIG_TSV_DELIMITER" read -r category _id _label _kind _package _default_flag _description _version_strategy _versions _min_macos _arch _notes < <(printf '%s\n' "$record")
     if [ "$category" = "$wanted" ]; then
       found=yes
     fi
