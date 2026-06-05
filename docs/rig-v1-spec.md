@@ -243,40 +243,44 @@ For v1, a **TSV file** is the right choice because a fresh Mac has the tools to 
 Recommended catalog fields:
 
 ```text
-category	id	label	kind	package	default	description	version_strategy	versions	notes
+category	id	label	kind	package	default	description	version_strategy	versions	min_macos	notes
 ```
 
-The `description` field is required and should be short enough to show inside prompts, `rig list`, and dry-run output. `version_strategy` explains whether the tool is installed as the current Homebrew/package-manager version or whether the user can choose from supported versions. `versions` is empty for unversioned items and a catalog-maintained list for tools where version selection is supported.
+The `description` field is required and should be short enough to show inside prompts, `rig list`, and dry-run output. `version_strategy` explains whether the tool is installed as the current Homebrew/package-manager version or whether the user can choose from supported versions. `versions` is empty for unversioned items and a catalog-maintained list for tools where version selection is supported. `min_macos` is empty for normal entries and set to the minimum supported macOS major version when Homebrew or the vendor requires one; selected entries with unmet `min_macos` fail before writing config or rendering an install plan.
 
 Example rows:
 
 ```text
-ide	vscode	Visual Studio Code	cask	visual-studio-code	yes	General-purpose code editor	homebrew-latest		Verify cask name
-ide	cursor	Cursor	cask	cursor	no	AI-assisted code editor	homebrew-latest		Verify cask name
-ide	antigravity-ide	Antigravity	cask	antigravity-ide	no	Google AI coding agent IDE	homebrew-latest		Verify cask name
-ide	kiro	Kiro	cask	kiro	no	Agentic IDE	homebrew-latest		Verify cask name
-terminal	ghostty	Ghostty	cask	ghostty	no	GPU-accelerated terminal emulator	homebrew-latest		Verify cask name
-terminal	warp	Warp	cask	warp	no	Rust-based terminal	homebrew-latest		Verify cask name
-ai	codex-cli	Codex CLI	cask	codex	no	OpenAI command-line coding agent	homebrew-latest		Verify current cask/formula choice
-ai	codex-desktop	Codex Desktop	cask	codex-app	no	Desktop app for managing Codex coding agents	homebrew-latest		Verify current cask name
-ai	claude-code-cli	Claude Code CLI	cask	claude-code	no	Anthropic terminal-based coding assistant	homebrew-latest		Use stable Homebrew cask
-ai	claude-code-desktop	Claude Code Desktop	cask	claude	no	Claude Desktop app with Claude Code workflows	homebrew-latest		Use official Claude desktop cask
-ai	pi-cli	Pi CLI	formula	pi-coding-agent	no	Minimal extensible terminal coding harness	homebrew-latest		Homebrew formula packages the pi.dev CLI
-ai	opencode-cli	OpenCode CLI	formula	opencode	no	AI coding agent built for the terminal	homebrew-latest		Homebrew core formula
-ai	opencode-desktop	OpenCode Desktop	cask	opencode-desktop	no	Desktop client for the OpenCode coding agent	homebrew-latest		Verify cask name
-browser	chrome	Google Chrome	cask	google-chrome	yes	Mainstream browser	homebrew-latest		Verify cask name
-browser	firefox	Firefox	cask	firefox	no	Open-source browser	homebrew-latest		Verify cask name
-browser	brave	Brave	cask	brave-browser	no	Privacy-focused browser	homebrew-latest		Verify cask name
-browser	zen	Zen Browser	cask	zen	no	Gecko-based browser	homebrew-latest		Verify cask name
-runtime	node-npm	Node.js/npm	external	nvm	no	Node.js runtime plus npm package manager	nvm	latest,lts,<node versions>	npm version follows Node unless user opts into npm upgrade
-runtime	bun	Bun	external	bun.com/install	no	JavaScript runtime, package manager, and bundler	bun-installer	latest,<bun versions>	Use Homebrew only for latest Homebrew-managed Bun
-infra	terraform	Terraform	version-manager	tenv:tf	no	HashiCorp infrastructure-as-code CLI	tenv	latest,<terraform versions>	Avoid disabled Homebrew core formula
-infra	opentofu	OpenTofu	version-manager	tenv:tofu	no	Open-source Terraform-compatible IaC CLI	tenv	latest,<opentofu versions>	Managed by tenv
-infra	terraspace	Terraspace	tap-formula	boltops-tools/software/terraspace	no	Framework for Terraform/OpenTofu project structure and workflows	homebrew-latest		Specific versions deferred unless RubyGems/Bundler path is added
-infra	terragrunt	Terragrunt	version-manager	tenv:tg	no	Wrapper for reusable Terraform/OpenTofu configuration and remote state	tenv	latest,<terragrunt versions>	Managed by tenv
-containers	orbstack	OrbStack	cask	orbstack	no	Fast Docker and Linux machine runtime for macOS	homebrew-latest		Verify cask name
-containers	docker-desktop	Docker Desktop	cask	docker-desktop	no	Docker GUI and runtime bundle for macOS	homebrew-latest		Verify current cask name
-containers	docker-cli	Docker CLI	formula	docker	no	Standalone Docker command-line client	homebrew-latest		Verify formula name
+ide	vscode	Visual Studio Code	cask	visual-studio-code	yes	General-purpose code editor	homebrew-latest			Verify cask name
+ide	cursor	Cursor	cask	cursor	no	AI-assisted code editor	homebrew-latest			Verify cask name
+ide	antigravity-ide	Antigravity	cask	antigravity-ide	no	Google AI coding agent IDE	homebrew-latest			Verify cask name
+ide	kiro	Kiro	cask	kiro	no	Agentic IDE	homebrew-latest			Verify cask name
+ide	sublime-text	Sublime Text	cask	sublime-text	no	Text editor for code, markup, and prose	homebrew-latest			Verify cask name
+terminal	ghostty	Ghostty	cask	ghostty	no	GPU-accelerated terminal emulator	homebrew-latest			Verify cask name
+terminal	warp	Warp	cask	warp	no	Rust-based terminal	homebrew-latest			Verify cask name
+ai	codex-cli	Codex CLI	cask	codex	no	OpenAI command-line coding agent	homebrew-latest			Verify current cask/formula choice
+ai	codex-desktop	Codex Desktop	cask	codex-app	no	Desktop app for managing Codex coding agents	homebrew-latest			Verify current cask name
+ai	chatgpt-desktop	ChatGPT Desktop	cask	chatgpt	no	OpenAI ChatGPT desktop app, separate from Codex	homebrew-latest			Verify current cask name
+ai	claude-code-cli	Claude Code CLI	cask	claude-code	no	Anthropic terminal-based coding assistant	homebrew-latest			Use stable Homebrew cask
+ai	claude-code-desktop	Claude Code Desktop	cask	claude	no	Claude Desktop app with Claude Code workflows	homebrew-latest			Use official Claude desktop cask
+ai	pi-cli	Pi CLI	formula	pi-coding-agent	no	Minimal extensible terminal coding harness	homebrew-latest			Homebrew formula packages the pi.dev CLI
+ai	opencode-cli	OpenCode CLI	formula	opencode	no	AI coding agent built for the terminal	homebrew-latest			Homebrew core formula
+ai	opencode-desktop	OpenCode Desktop	cask	opencode-desktop	no	Desktop client for the OpenCode coding agent	homebrew-latest			Verify cask name
+browser	chrome	Google Chrome	cask	google-chrome	yes	Mainstream browser	homebrew-latest			Verify cask name
+browser	firefox	Firefox	cask	firefox	no	Open-source browser	homebrew-latest			Verify cask name
+browser	brave	Brave	cask	brave-browser	no	Privacy-focused browser	homebrew-latest			Verify cask name
+browser	zen	Zen Browser	cask	zen	no	Gecko-based browser	homebrew-latest			Verify cask name
+communication	slack	Slack	cask	slack	no	Team messaging and collaboration app	homebrew-latest			Verify cask name
+communication	teams	Microsoft Teams	cask	microsoft-teams	no	Microsoft team chat and video meetings app	homebrew-latest			Verify cask name
+runtime	node-npm	Node.js/npm	external	nvm	no	Node.js runtime plus npm package manager	nvm	latest,lts,<node versions>		npm version follows Node unless user opts into npm upgrade
+runtime	bun	Bun	external	bun.com/install	no	JavaScript runtime, package manager, and bundler	bun-installer	latest,<bun versions>		Use Homebrew only for latest Homebrew-managed Bun
+infra	terraform	Terraform	version-manager	tenv:tf	no	HashiCorp infrastructure-as-code CLI	tenv	latest,<terraform versions>		Avoid disabled Homebrew core formula
+infra	opentofu	OpenTofu	version-manager	tenv:tofu	no	Open-source Terraform-compatible IaC CLI	tenv	latest,<opentofu versions>		Managed by tenv
+infra	terraspace	Terraspace	tap-formula	boltops-tools/software/terraspace	no	Framework for Terraform/OpenTofu project structure and workflows	homebrew-latest			Specific versions deferred unless RubyGems/Bundler path is added
+infra	terragrunt	Terragrunt	version-manager	tenv:tg	no	Wrapper for reusable Terraform/OpenTofu configuration and remote state	tenv	latest,<terragrunt versions>		Managed by tenv
+containers	orbstack	OrbStack	cask	orbstack	no	Fast Docker and Linux machine runtime for macOS; requires macOS 14+	homebrew-latest		14	Verify cask name
+containers	docker-desktop	Docker Desktop	cask	docker-desktop	no	Docker GUI and runtime bundle for macOS; requires macOS 14+	homebrew-latest		14	Verify current cask name
+containers	docker-cli	Docker CLI	formula	docker	no	Standalone Docker command-line client	homebrew-latest			Verify formula name
 ```
 
 Before implementation, actual Homebrew formula/cask names and external installer sources should be verified with `brew info`, `brew info --cask`, official package-manager metadata, or the vendor's official installation docs because package names and distribution methods can change. Items that cannot be installed automatically and safely should not pretend to be installable; they should be disabled with a clear reason or omitted until a supported installer is available.
